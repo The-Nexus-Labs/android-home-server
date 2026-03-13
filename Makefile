@@ -1,7 +1,7 @@
 PROFILE ?=
 PYTHON ?= python3
 
-.PHONY: help preflight manifest download unlock flash root provision interactive
+.PHONY: help preflight manifest download unlock flash root provision interactive updates-disable updates-enable updates-status ota-manual ota-auto ota-status
 
 help:
 	@printf '%s\n' \
@@ -13,6 +13,9 @@ help:
 	  '  make unlock      - reboot to bootloader and unlock (wipes device)' \
 	  '  make flash       - flash the pinned GrapheneOS release' \
 	  '  make root        - patch init_boot with Magisk on-device and flash it' \
+	  '  make updates-disable - disable the OS update client' \
+	  '  make updates-enable  - re-enable the OS update client' \
+	  '  make updates-status  - print current OS update-client mode' \
 	  '  make provision   - install Termux, disable idle, set up SSH/Wi-Fi' \
 	  '  make interactive - run the full guided workflow with on-device instructions'
 
@@ -33,6 +36,21 @@ flash:
 
 root:
 	PROFILE="$(PROFILE)" ./scripts/root-magisk.sh
+
+updates-disable:
+	PROFILE="$(PROFILE)" ./scripts/configure-system-updater.sh disable
+
+updates-enable:
+	PROFILE="$(PROFILE)" ./scripts/configure-system-updater.sh enable
+
+updates-status:
+	PROFILE="$(PROFILE)" ./scripts/configure-system-updater.sh status
+
+ota-manual: updates-disable
+
+ota-auto: updates-enable
+
+ota-status: updates-status
 
 provision:
 	PROFILE="$(PROFILE)" ./scripts/postflash-provision.sh

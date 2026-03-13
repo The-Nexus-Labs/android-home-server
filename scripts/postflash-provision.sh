@@ -9,6 +9,8 @@ require_manifest
 assert_adb_device
 ensure_dirs
 
+"$SCRIPT_DIR/configure-system-updater.sh" disable
+
 termux_apk="$DOWNLOAD_DIR/$(manifest_value termux.apk_name)"
 termux_boot_apk="$DOWNLOAD_DIR/$(manifest_value termux_boot.apk_name)"
 idle_script_local="$PROJECT_ROOT/payloads/magisk-disable-idle.sh"
