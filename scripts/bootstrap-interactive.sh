@@ -44,6 +44,78 @@ detect_wifi_ip() {
   adb shell ip -4 addr show wlan0 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -n1 | tr -d '\r'
 }
 
+yes_no_unknown() {
+  case "$1" in
+    1) printf 'yes' ;;
+    0) printf 'no' ;;
+    *) printf 'unknown' ;;
+  esac
+}
+
+magisk_ui_notification_label() {
+  case "$1" in
+    0) printf 'off' ;;
+    1) printf 'toast' ;;
+    *) printf 'unknown' ;;
+  esac
+}
+
+magisk_policy_notification_disabled_label() {
+  case "$1" in
+    0) printf 'yes' ;;
+    1) printf 'no' ;;
+    *) printf 'unknown' ;;
+  esac
+}
+
+grapheneos_updater_disabled() {
+  if ! adb_package_installed app.seamlessupdate.client && ! is_grapheneos_build; then
+    return 1
+  fi
+  adb shell pm list packages -d 2>/dev/null | tr -d '\r' | grep -qx 'package:app.seamlessupdate.client'
+}
+
+wifi_mac_randomization_disabled_for_profile() {
+  local setting
+  [[ -n "${WIFI_SSID:-}" ]] || return 1
+
+  setting=$(adb shell dumpsys wifi 2>/dev/null | awk -v ssid="$WIFI_SSID" '
+    index($0, "SSID: \"" ssid "\"") { seen = 1 }
+    seen && /macRandomizationSetting:/ {
+      print $2
+      exit
+    }
+  ')
+
+  [[ "$setting" == '0' ]]
+}
+
+print_workflow_plan() {
+  printf 'Planned actions during this run:\n'
+  printf '  - inspect the connected device and resume from the detected state\n'
+  printf '  - prepare pinned platform-tools, GrapheneOS, Magisk and Termux assets\n'
+  printf '  - unlock the bootloader when needed\n'
+  printf '  - flash GrapheneOS when needed\n'
+  printf '  - install and activate Magisk root\n'
+  printf '  - grant and validate shell root access\n'
+  if [[ -n "${WIFI_SSID:-}" ]]; then
+    printf '  - connect Wi-Fi to %s\n' "$WIFI_SSID"
+    if is_grapheneos_build; then
+      printf '  - disable GrapheneOS Wi-Fi MAC randomization for %s\n' "$WIFI_SSID"
+    fi
+  else
+    printf '  - skip Wi-Fi provisioning because WIFI_SSID is empty\n'
+  fi
+  printf '  - disable the GrapheneOS system updater package\n'
+  printf '  - install the Magisk battery-tuning service script\n'
+  printf '  - install Termux and Termux:Boot\n'
+  printf '  - stage Termux setup.sh and boot scripts\n'
+  printf '  - set Magisk UI Superuser notification to OFF\n'
+  printf '  - disable Magisk root-granted notifications for shell and Termux\n'
+  printf '  - launch the Termux bootstrap and bring up sshd\n'
+  printf '  - validate SSH reachability and always-on Termux checks\n\n'
+}
+
 termux_boot_script_present() {
   adb_root 'test -f /data/data/com.termux/files/home/.termux/boot/10-home-server.sh' >/dev/null 2>&1
 }
@@ -104,6 +176,7 @@ wait_for_termux_runtime_validation() {
     fi
     if termux_root_enabled_present; then
       termux_root=1
+      bash "$SCRIPT_DIR/configure-magisk-notifications.sh" disable com.termux >/dev/null 2>&1 || true
     fi
     if termux_sshd_running; then
       sshd_running=1
@@ -249,6 +322,12 @@ refresh_runtime_state() {
 }
 
 print_resume_summary() {
+  local updater_disabled='unknown'
+  local mac_randomization_disabled='unknown'
+  local magisk_ui_notification='unknown'
+  local shell_notification='unknown'
+  local termux_notification='unknown'
+
   printf '\nDetected state:\n'
   if [[ "$RUNTIME_ADB_READY" == "1" ]]; then
     printf '  - adb: ready\n'
@@ -262,6 +341,31 @@ print_resume_summary() {
     printf '  - setup helper present: %s\n' "$([[ "$RUNTIME_TERMUX_SETUP_HELPER_READY" == "1" ]] && printf yes || printf no)"
     printf '  - Termux boot script present: %s\n' "$([[ "$RUNTIME_TERMUX_BOOT_SCRIPT_READY" == "1" ]] && printf yes || printf no)"
     printf '  - SSH reachable: %s\n' "$([[ "$RUNTIME_SSH_READY" == "1" ]] && printf yes || printf no)"
+    if grapheneos_updater_disabled; then
+      updater_disabled='yes'
+    else
+      updater_disabled='no'
+    fi
+    printf '  - GrapheneOS updater disabled: %s\n' "$updater_disabled"
+    if [[ -n "${WIFI_SSID:-}" ]]; then
+      if wifi_mac_randomization_disabled_for_profile; then
+        mac_randomization_disabled='yes'
+      else
+        mac_randomization_disabled='no'
+      fi
+      printf '  - configured Wi-Fi SSID: %s\n' "$WIFI_SSID"
+      printf '  - Wi-Fi MAC randomization disabled for %s: %s\n' "$WIFI_SSID" "$mac_randomization_disabled"
+    fi
+    if [[ "$RUNTIME_ROOT_READY" == "1" && "$RUNTIME_MAGISK_APP_READY" == "1" ]]; then
+      magisk_ui_notification=$(magisk_su_notification_ui_value 2>/dev/null || printf unknown)
+      printf '  - Magisk UI Superuser notification: %s\n' "$(magisk_ui_notification_label "$magisk_ui_notification")"
+      shell_notification=$(magisk_policy_notification_value_by_uid 2000 2>/dev/null || printf unknown)
+      printf '  - Magisk shell grant notification disabled: %s\n' "$(magisk_policy_notification_disabled_label "$shell_notification")"
+      if [[ "$RUNTIME_TERMUX_READY" == "1" ]]; then
+        termux_notification=$(magisk_policy_notification_value_for_package com.termux 2>/dev/null || printf unknown)
+        printf '  - Magisk Termux grant notification disabled: %s\n' "$(magisk_policy_notification_disabled_label "$termux_notification")"
+      fi
+    fi
     if [[ -n "$RUNTIME_WIFI_IP" ]]; then
       printf '  - Wi-Fi IP: %s\n' "$RUNTIME_WIFI_IP"
     fi
@@ -425,6 +529,7 @@ fi
 
 refresh_runtime_state
 print_resume_summary
+print_workflow_plan
 
 if [[ "$RUNTIME_GRAPHENEOS_READY" != "1" && "$STATE_GRAPHENEOS_FLASHED" != "1" ]]; then
   print_manual_block "Before continuing:
@@ -512,7 +617,7 @@ else
   mark_state STATE_ROOT_READY
 fi
 
-log "Step 6/7: Provisioning Wi-Fi, battery tuning, Termux and SSH"
+log "Step 6/7: Provisioning Wi-Fi, updater policy, Magisk notification policy, battery tuning, Termux and SSH"
 refresh_runtime_state
 if [[ "$RUNTIME_SSH_READY" == "1" && "$RUNTIME_TERMUX_SETUP_HELPER_READY" == "1" && "$RUNTIME_TERMUX_BOOT_SCRIPT_READY" == "1" ]]; then
   log "SSH is already reachable; skipping provisioning step."
@@ -537,6 +642,24 @@ log "Step 7/7: Final SSH and always-on validation"
 ssh_port_open "$wifi_ip" "$TERMUX_SSH_PORT" || die "SSH port $TERMUX_SSH_PORT is not reachable on $wifi_ip"
 wait_for_termux_runtime_validation
 
+magisk_ui_notification=$(magisk_su_notification_ui_value 2>/dev/null || printf unknown)
+shell_notification=$(magisk_policy_notification_value_by_uid 2000 2>/dev/null || printf unknown)
+termux_notification=$(magisk_policy_notification_value_for_package com.termux 2>/dev/null || printf unknown)
+if [[ -n "${WIFI_SSID:-}" ]]; then
+  if wifi_mac_randomization_disabled_for_profile; then
+    mac_randomization_disabled='yes'
+  else
+    mac_randomization_disabled='no'
+  fi
+else
+  mac_randomization_disabled='unknown'
+fi
+if grapheneos_updater_disabled; then
+  updater_disabled='yes'
+else
+  updater_disabled='no'
+fi
+
 cat <<EOF
 
 Interactive GrapheneOS server bootstrap completed.
@@ -548,4 +671,12 @@ SSH endpoint:
   host: $wifi_ip
   port: $TERMUX_SSH_PORT
   password: $TERMUX_SSH_PASSWORD
+
+Detailed outcome:
+  Wi-Fi SSID: ${WIFI_SSID:-not configured}
+  GrapheneOS Wi-Fi MAC randomization disabled: $mac_randomization_disabled
+  GrapheneOS updater disabled: $updater_disabled
+  Magisk UI Superuser notification: $(magisk_ui_notification_label "$magisk_ui_notification")
+  Magisk shell grant notification disabled: $(magisk_policy_notification_disabled_label "$shell_notification")
+  Magisk Termux grant notification disabled: $(magisk_policy_notification_disabled_label "$termux_notification")
 EOF

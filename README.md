@@ -1,4 +1,4 @@
-<h1 align="center">📱➡️🖥️ Android Home Server Bootstrap</h1>
+oc<h1 align="center">📱➡️🖥️ Android Home Server Bootstrap</h1>
 
 <p align="center">
 Turn supported Android devices into small home servers with SSH access.
@@ -48,19 +48,9 @@ If something fails, run `make interactive` again. The workflow is designed to re
 8. Install Magisk root.
 9. Install Termux and Termux:Boot.
 10. Disable battery optimizations and keep Termux running.
-11. Connect Wi‑Fi if configured.
+11. Connect Wi‑Fi if configured and disable GrapheneOS per-connection MAC randomization for that network.
 12. Disable the OS update client.
 13. Set up SSH.
-
-## 🔄 OTA update policy
-
-This repo disables the OS update client during provisioning so updates only happen when explicitly managed.
-
-- `make updates-disable` disables the current OS update client.
-- `make updates-enable` re-enables it.
-- `make updates-status` shows the current mode.
-
-On GrapheneOS, this currently disables the `System Updater` app, matching the official guidance for turning off automatic background updates when you want to manage updates yourself.
 
 ## 👆 Manual steps still required
 
@@ -69,3 +59,7 @@ On GrapheneOS, this currently disables the `System Updater` app, matching the of
 - re-enable `USB debugging` after flashing
 - grant Magisk permissions
 - open Termux manually if Android blocks automation
+
+## Docs
+
+Additional docs: [docs/index.md](docs/index.md)

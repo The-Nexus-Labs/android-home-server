@@ -216,6 +216,196 @@ adb_root() {
   adb shell "if command -v su >/dev/null 2>&1; then su -c $quoted; else /debug_ramdisk/magisk su -c $quoted; fi"
 }
 
+magisk_pref_path() {
+  printf '%s\n' '/data/user_de/0/com.topjohnwu.magisk/shared_prefs/com.topjohnwu.magisk_preferences.xml'
+}
+
+magisk_su_notification_ui_value() {
+  local local_xml remote_xml value
+
+  local_xml=$(mktemp)
+  remote_xml=/data/local/tmp/magisk-prefs-read.xml
+
+  adb_root "cp '$(magisk_pref_path)' '$remote_xml' && chmod 644 '$remote_xml'" >/dev/null 2>&1 || {
+    rm -f "$local_xml"
+    return 1
+  }
+  adb pull "$remote_xml" "$local_xml" >/dev/null
+
+  value=$(python3 - <<'PY' "$local_xml"
+import sys
+import xml.etree.ElementTree as ET
+
+path = sys.argv[1]
+try:
+    root = ET.parse(path).getroot()
+except Exception:
+    print(1)
+    raise SystemExit(0)
+
+for node in root.findall('string'):
+    if node.get('name') == 'su_notification':
+        print((node.text or '1').strip() or '1')
+        raise SystemExit(0)
+
+print(1)
+PY
+)
+
+  rm -f "$local_xml"
+  adb_root "rm -f '$remote_xml'" >/dev/null 2>&1 || true
+  printf '%s\n' "$value"
+}
+
+magisk_set_su_notification_ui_value() {
+  local value=$1
+  local app_uid local_xml remote_xml
+
+  [[ "$value" == "0" || "$value" == "1" ]] || die "invalid Magisk UI notification value: $value"
+
+  app_uid=$(adb_package_uid com.topjohnwu.magisk)
+  [[ -n "$app_uid" ]] || die "Magisk app is not installed"
+
+  local_xml=$(mktemp)
+  remote_xml=/data/local/tmp/magisk-prefs-write.xml
+
+  adb_root "am force-stop com.topjohnwu.magisk >/dev/null 2>&1 || true"
+  if ! adb_root "cp '$(magisk_pref_path)' '$remote_xml' && chmod 644 '$remote_xml'" >/dev/null 2>&1; then
+    : > "$local_xml"
+  else
+    adb pull "$remote_xml" "$local_xml" >/dev/null
+  fi
+
+  python3 - <<'PY' "$local_xml" "$value"
+import sys
+import xml.etree.ElementTree as ET
+
+path, value = sys.argv[1], sys.argv[2]
+
+try:
+    tree = ET.parse(path)
+    root = tree.getroot()
+except Exception:
+    root = ET.Element('map')
+    tree = ET.ElementTree(root)
+
+node = None
+for child in root.findall('string'):
+    if child.get('name') == 'su_notification':
+        node = child
+        break
+
+if node is None:
+    node = ET.SubElement(root, 'string', {'name': 'su_notification'})
+
+node.text = value
+tree.write(path, encoding='utf-8', xml_declaration=True)
+PY
+
+  adb push "$local_xml" "$remote_xml" >/dev/null
+  adb_root "cat '$remote_xml' > '$(magisk_pref_path)' && chown ${app_uid}:${app_uid} '$(magisk_pref_path)' && chmod 660 '$(magisk_pref_path)' && am force-stop com.topjohnwu.magisk >/dev/null 2>&1 || true"
+  rm -f "$local_xml"
+  adb_root "rm -f '$remote_xml'" >/dev/null 2>&1 || true
+}
+
+magisk_set_policy_notification_by_uid() {
+  local uid=$1
+  local value=$2
+  local label=${3:-uid:$uid}
+  local local_db remote_db updated
+
+  [[ "$uid" =~ ^[0-9]+$ ]] || die "invalid Magisk policy uid: $uid"
+  [[ "$value" == "0" || "$value" == "1" ]] || die "invalid Magisk notification value: $value"
+
+  local_db=$(mktemp)
+  remote_db=/data/local/tmp/magisk-policy.db
+
+  adb_root "cp /data/adb/magisk.db '$remote_db' && chmod 644 '$remote_db'"
+  adb pull "$remote_db" "$local_db" >/dev/null
+
+  updated=$(python3 - <<'PY' "$local_db" "$uid" "$value"
+import sqlite3
+import sys
+
+path, uid, value = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+conn = sqlite3.connect(path)
+cur = conn.cursor()
+cur.execute('UPDATE policies SET notification=? WHERE uid=?', (value, uid))
+print(cur.rowcount)
+if cur.rowcount:
+    conn.commit()
+conn.close()
+PY
+)
+
+  if [[ "$updated" =~ ^[1-9][0-9]*$ ]]; then
+    adb push "$local_db" "$remote_db" >/dev/null
+    adb_root "cat '$remote_db' > /data/adb/magisk.db && chown 0:0 /data/adb/magisk.db && chmod 000 /data/adb/magisk.db"
+    rm -f "$local_db"
+    adb_root "rm -f '$remote_db'" >/dev/null 2>&1 || true
+    log "Magisk root notification disabled for $label"
+    return 0
+  fi
+
+  rm -f "$local_db"
+  adb_root "rm -f '$remote_db'" >/dev/null 2>&1 || true
+  return 1
+}
+
+magisk_set_policy_notification_for_package() {
+  local package=$1
+  local value=$2
+  local uid
+
+  uid=$(adb_package_uid "$package")
+  [[ -n "$uid" ]] || return 1
+  magisk_set_policy_notification_by_uid "$uid" "$value" "$package"
+}
+
+magisk_policy_notification_value_by_uid() {
+  local uid=$1
+  local local_db remote_db value
+
+  [[ "$uid" =~ ^[0-9]+$ ]] || die "invalid Magisk policy uid: $uid"
+
+  local_db=$(mktemp)
+  remote_db=/data/local/tmp/magisk-policy-read.db
+
+  adb_root "cp /data/adb/magisk.db '$remote_db' && chmod 644 '$remote_db'" >/dev/null 2>&1 || {
+    rm -f "$local_db"
+    return 1
+  }
+  adb pull "$remote_db" "$local_db" >/dev/null
+
+  value=$(python3 - <<'PY' "$local_db" "$uid"
+import sqlite3
+import sys
+
+path, uid = sys.argv[1], int(sys.argv[2])
+conn = sqlite3.connect(path)
+cur = conn.cursor()
+row = cur.execute('SELECT notification FROM policies WHERE uid=?', (uid,)).fetchone()
+if row is not None:
+    print(row[0])
+conn.close()
+PY
+)
+
+  rm -f "$local_db"
+  adb_root "rm -f '$remote_db'" >/dev/null 2>&1 || true
+  [[ -n "$value" ]] || return 1
+  printf '%s\n' "$value"
+}
+
+magisk_policy_notification_value_for_package() {
+  local package=$1
+  local uid
+
+  uid=$(adb_package_uid "$package")
+  [[ -n "$uid" ]] || return 1
+  magisk_policy_notification_value_by_uid "$uid"
+}
+
 device_prop() {
   adb shell getprop "$1" | tr -d '\r'
 }

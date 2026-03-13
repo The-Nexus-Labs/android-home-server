@@ -5,6 +5,7 @@ set -euo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 require_cmd adb
+require_cmd python3
 require_manifest
 assert_adb_device
 ensure_dirs
@@ -31,6 +32,9 @@ done
 
 log "Checking that Magisk root is available"
 adb_root id >/dev/null 2>&1 || die "root is not available yet; run ./scripts/root-magisk.sh first"
+
+log "Disabling Magisk root-granted notifications for shell"
+bash "$SCRIPT_DIR/configure-magisk-notifications.sh" disable shell
 
 if [[ -n "${WIFI_SSID:-}" ]]; then
   log "Connecting device Wi-Fi to $WIFI_SSID"
@@ -103,6 +107,9 @@ adb shell am startservice \
   --ez com.termux.RUN_COMMAND_BACKGROUND true \
   --es com.termux.RUN_COMMAND_RUNNER app-shell >/dev/null 2>&1 || true
 sleep 20
+
+log "Disabling Magisk root-granted notifications for Termux if its policy row exists"
+bash "$SCRIPT_DIR/configure-magisk-notifications.sh" disable com.termux || true
 
 wifi_ip=$(adb shell ip -4 addr show wlan0 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -n1 | tr -d '\r')
 
