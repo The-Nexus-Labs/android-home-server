@@ -173,10 +173,6 @@ On the phone:
 }
 
 assets_ready() {
-  if [[ "${GRAPHENEOS_VERSION,,}" == "latest" ]]; then
-    return 1
-  fi
-
   [[ -f "$MANIFEST_PATH" ]] || return 1
   local required=(
     "$DOWNLOAD_DIR/$(manifest_value grapheneos.release_name)"

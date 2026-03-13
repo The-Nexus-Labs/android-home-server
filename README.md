@@ -1,88 +1,94 @@
 # Android home server bootstrap
 
-Simple, reproducible host-side automation for turning a Google Pixel 7 Pro (`cheetah`) into a rooted GrapheneOS-based home server.
+## Disclaimer
 
-## What it does
+This is a vibe-coded project. It works when it works. There are no guarantees, no warranties, and probably a few weird edge cases.
 
-1. Detects and validates the connected device over `adb`
-2. Downloads a pinned official GrapheneOS factory image, pinned platform-tools, pinned Magisk, pinned Termux, and pinned Termux:Boot assets
-3. Verifies the platform-tools checksum and the GrapheneOS factory-image OpenSSH signature
-4. Unlocks the bootloader with explicit on-device confirmation
-5. Flashes the pinned official GrapheneOS release with the official `flash-all.sh`
-6. Roots GrapheneOS by patching and flashing `init_boot.img` with Magisk on the device itself
-7. Installs Termux and Termux:Boot
-8. Disables battery optimization and background restrictions for the server role
-9. Connects Wi‑Fi from `adb` if SSID credentials are configured
-10. Prepares a Termux SSH bootstrap and records SSH connection details
+If something breaks, gets stuck, or behaves like Android is haunted, just rerun the workflow. Seriously, rerunning the scripts a few times is part of the strategy here.
 
-## Reproducibility model
+## What this project does
 
-Everything important is pinned in [config/cheetah.env](config/cheetah.env):
+This project turns supported Android devices into small home-servers.
 
-- GrapheneOS version
-- platform-tools version and checksum
-- Magisk APK URL
-- Termux APK URL
-- Termux:Boot APK URL
+It automates the annoying host-side setup needed to:
 
-Updating the workflow for a newer release is a config change, not a code rewrite.
+- detect the device
+- unlock the bootloader
+- flash the target OS
+- root the device with Magisk
+- install Termux and Termux:Boot
+- disable battery optimizations and makes Termux run all the time
+- connects Wi‑Fi if configured
+- prepare SSH access
 
-If `PROFILE` is not set, the scripts auto-detect the connected device codename and use [config/cheetah.env](config/cheetah.env), [config/tangorpro.env](config/tangorpro.env), etc. when a matching profile exists.
+The goal is simple: plug in an Android device and guide it into becoming a small server box. That you can manage over SSH (for example with Ansible).
 
-`GRAPHENEOS_VERSION=latest` is supported. The exact resolved GrapheneOS release is written into the generated manifest under [artifacts](artifacts), which keeps each run reproducible after resolution while still tracking the latest stable release.
+## Supported devices
 
-Shared runtime settings such as Wi‑Fi credentials and the temporary Termux SSH password are configured in [config/global.env](config/global.env) instead of per-device profile files.
+| Device              | Codename    | OS         |
+| ------------------- | ----------- | ---------- |
+| Google Pixel 7 Pro  | `cheetah`   | GrapheneOS |
+| Google Pixel Tablet | `tangorpro` | GrapheneOS |
 
-## Main entrypoint
+Notes:
 
-Use the guided workflow:
+- GrapheneOS is what this repo is currently set up for.
+- LineageOS may actually be better for automation in theory, but it was not working here for some magical reason, so this project uses GrapheneOS for Pixel devices.
+
+## How to use it
+
+Create a [config/global.env](config/global.env) from the [config/global.env.example](config/global.env.example) template and fill up the password and Wi‑Fi details.
+
+Run:
 
 ```sh
 make interactive
 ```
 
-The interactive script tells the user exactly what to do on the phone at each stage and pauses until the required manual steps are completed.
+Then follow the instructions.
 
-It is designed to be rerun safely. The workflow detects completed milestones such as bootloader unlock, GrapheneOS already being installed, Magisk root already being available, and SSH already responding, then resumes from the next unfinished step.
+The script pauses and tells you what to do on the device when manual confirmation is required.
 
-## Files
+If you get into trouble:
 
-- [config/cheetah.env](config/cheetah.env) — pinned asset versions, Wi‑Fi, and SSH defaults
-- [scripts/bootstrap-interactive.sh](scripts/bootstrap-interactive.sh) — full guided workflow
-- [scripts/preflight.sh](scripts/preflight.sh) — checks the connected phone state
-- [scripts/download-assets.sh](scripts/download-assets.sh) — downloads and verifies all pinned assets
-- [scripts/unlock-bootloader.sh](scripts/unlock-bootloader.sh) — destructive unlock helper
-- [scripts/flash-grapheneos.sh](scripts/flash-grapheneos.sh) — flashes the official GrapheneOS factory image
-- [scripts/root-magisk.sh](scripts/root-magisk.sh) — patches `init_boot.img` on-device and flashes it
-- [scripts/postflash-provision.sh](scripts/postflash-provision.sh) — installs Termux, disables idle, stages SSH bootstrap
-- [payloads/termux-bootstrap.sh](payloads/termux-bootstrap.sh) — executed inside Termux to install and start `sshd`
-- [payloads/magisk-disable-idle.sh](payloads/magisk-disable-idle.sh) — Magisk boot-time battery/background tuning
+- run `make interactive` again
+- rerun the scripts multiple times if needed
+- do not assume the first weird failure is final
 
-## Manual steps still required
+The workflow is meant to resume and continue when possible.
 
-Some steps cannot be bypassed because the device intentionally requires physical confirmation:
+## What the script does
 
-- enable `OEM unlocking`
-- confirm the bootloader unlock prompt
-- complete first GrapheneOS boot and re-enable `USB debugging`
-- open Magisk and allow shell / ADB superuser access
-- if automatic Termux execution is blocked, open Termux and run:
-  - `./setup.sh`
+In short, the interactive workflow does this:
 
-## Non-interactive targets
+1. Checks that a supported Android device is connected.
+2. Detects the device profile automatically when possible.
+3. Downloads the required tools and OS images.
+4. Verifies the downloaded files.
+5. Helps you unlock the bootloader.
+6. Flashes OS.
+7. Boots the device back up and prepares it for the next steps.
+8. Installs and sets up Magisk root.
+9. Installs Termux and Termux:Boot.
+10. Applies server-friendly tweaks (battery optimizations, always-on Termux).
+11. Connects Wi‑Fi if configured.
+12. Prepares SSH access so the device can be managed like a tiny server.
 
-```sh
-make preflight
-make download
-make unlock
-make flash
-make root
-make provision
-```
+## Manual stuff you still need to do
 
-## Notes
+Some steps still need human interaction on the device, including:
 
-- `make unlock` wipes the device.
-- `make flash` expects the device to already be in Fastboot Mode.
-- `make root` expects GrapheneOS to already be booted with USB debugging enabled.
-- the default SSH password is intentionally temporary and should be rotated immediately after setup.
+- enabling `OEM unlocking`
+- confirming the bootloader unlock
+- re-enabling `USB debugging` after flashing
+- granting Magisk permissions
+- opening Termux manually if Android decides to be difficult
+
+## Config
+
+Shared settings live in [config/global.env](config/global.env).
+
+Device-specific settings live in (you probably don't need to change these):
+
+- [config/cheetah.env](config/cheetah.env)
+- [config/tangorpro.env](config/tangorpro.env)
