@@ -11,6 +11,11 @@ ensure_dirs
 
 "$SCRIPT_DIR/configure-system-updater.sh" disable
 
+wifi_randomization_args=()
+if is_grapheneos_build; then
+  wifi_randomization_args=(-r none)
+fi
+
 termux_apk="$DOWNLOAD_DIR/$(manifest_value termux.apk_name)"
 termux_boot_apk="$DOWNLOAD_DIR/$(manifest_value termux_boot.apk_name)"
 idle_script_local="$PROJECT_ROOT/payloads/magisk-disable-idle.sh"
@@ -30,10 +35,15 @@ adb_root id >/dev/null 2>&1 || die "root is not available yet; run ./scripts/roo
 if [[ -n "${WIFI_SSID:-}" ]]; then
   log "Connecting device Wi-Fi to $WIFI_SSID"
   adb shell cmd wifi set-wifi-enabled enabled
+  if [[ "${#wifi_randomization_args[@]}" -gt 0 ]]; then
+    log "Disabling Wi-Fi MAC randomization for $WIFI_SSID"
+  fi
   if [[ "$WIFI_SECURITY" == "open" ]]; then
-    adb shell cmd wifi connect-network "$WIFI_SSID" open
+    adb shell cmd wifi add-network "$WIFI_SSID" open "${wifi_randomization_args[@]}" >/dev/null
+    adb shell cmd wifi connect-network "$WIFI_SSID" open "${wifi_randomization_args[@]}"
   else
-    adb shell cmd wifi connect-network "$WIFI_SSID" "$WIFI_SECURITY" "$WIFI_PASSPHRASE"
+    adb shell cmd wifi add-network "$WIFI_SSID" "$WIFI_SECURITY" "$WIFI_PASSPHRASE" "${wifi_randomization_args[@]}" >/dev/null
+    adb shell cmd wifi connect-network "$WIFI_SSID" "$WIFI_SECURITY" "$WIFI_PASSPHRASE" "${wifi_randomization_args[@]}"
   fi
   sleep 8
 else
