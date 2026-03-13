@@ -6,6 +6,90 @@ PROJECT_ROOT=$(cd -- "$SCRIPT_DIR/.." && pwd)
 DEFAULT_PROFILE_FILE="$PROJECT_ROOT/config/cheetah.env"
 GLOBAL_ENV_FILE="$PROJECT_ROOT/config/global.env"
 
+adb_connected_serials() {
+  adb devices 2>/dev/null | awk 'NR > 1 && $2 == "device" {print $1}'
+}
+
+fastboot_connected_serials() {
+  fastboot devices 2>/dev/null | awk 'NF >= 1 {print $1}'
+}
+
+describe_adb_device() {
+  local serial=$1
+  local model codename
+  model=$(adb -s "$serial" shell getprop ro.product.model 2>/dev/null | tr -d '\r')
+  codename=$(adb -s "$serial" shell getprop ro.product.device 2>/dev/null | tr -d '\r')
+  printf 'adb %s - %s (%s)\n' "$serial" "${model:-unknown}" "${codename:-unknown}"
+}
+
+describe_fastboot_device() {
+  local serial=$1
+  local product
+  product=$(fastboot -s "$serial" getvar product 2>&1 | awk -F': *' '/product:/ {print $2}' | tail -n1 | tr -d '\r')
+  printf 'fastboot %s - %s\n' "$serial" "${product:-unknown}"
+}
+
+select_target_device() {
+  local -a adb_serials=() fastboot_serials=() choices=() descriptions=()
+  local total index selection selected_serial
+
+[[ -n "${ANDROID_SERIAL:-}" ]] && return 0
+
+if command -v adb >/dev/null 2>&1; then
+  mapfile -t adb_serials < <(adb_connected_serials)
+fi
+
+if command -v fastboot >/dev/null 2>&1; then
+  mapfile -t fastboot_serials < <(fastboot_connected_serials)
+fi
+
+total=$(( ${#adb_serials[@]} + ${#fastboot_serials[@]} ))
+[[ "$total" -gt 0 ]] || return 0
+
+if [[ "$total" -eq 1 ]]; then
+  if [[ "${#adb_serials[@]}" -eq 1 ]]; then
+    export ANDROID_SERIAL="${adb_serials[0]}"
+  else
+    export ANDROID_SERIAL="${fastboot_serials[0]}"
+  fi
+  return 0
+fi
+
+if [[ ! -t 0 ]]; then
+  printf '[x] multiple devices detected. Set ANDROID_SERIAL to the target device serial before running this script.\n' >&2
+  exit 1
+fi
+
+for selected_serial in "${adb_serials[@]}"; do
+  choices+=("$selected_serial")
+  descriptions+=("$(describe_adb_device "$selected_serial")")
+done
+
+for selected_serial in "${fastboot_serials[@]}"; do
+  choices+=("$selected_serial")
+  descriptions+=("$(describe_fastboot_device "$selected_serial")")
+done
+
+printf 'Multiple devices detected. Select the target device:\n'
+index=1
+for selection in "${descriptions[@]}"; do
+  printf '  %d) %s\n' "$index" "$selection"
+  index=$((index + 1))
+done
+
+while true; do
+  printf 'Selection [1-%d]: ' "${#choices[@]}"
+  read -r selection
+  [[ "$selection" =~ ^[0-9]+$ ]] || continue
+  if (( selection >= 1 && selection <= ${#choices[@]} )); then
+    export ANDROID_SERIAL="${choices[selection-1]}"
+    return 0
+  fi
+done
+}
+
+select_target_device
+
 resolve_connected_codename() {
   local codename=
 
