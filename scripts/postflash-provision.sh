@@ -12,11 +12,6 @@ ensure_dirs
 
 "$SCRIPT_DIR/configure-system-updater.sh" disable
 
-wifi_randomization_args=()
-if is_grapheneos_build; then
-  wifi_randomization_args=(-r none)
-fi
-
 termux_apk="$DOWNLOAD_DIR/$(manifest_value termux.apk_name)"
 termux_boot_apk="$DOWNLOAD_DIR/$(manifest_value termux_boot.apk_name)"
 idle_script_local="$PROJECT_ROOT/payloads/magisk-disable-idle.sh"
@@ -38,17 +33,10 @@ bash "$SCRIPT_DIR/configure-magisk-notifications.sh" disable shell
 
 if [[ -n "${WIFI_SSID:-}" ]]; then
   log "Connecting device Wi-Fi to $WIFI_SSID"
-  adb shell cmd wifi set-wifi-enabled enabled
-  if [[ "${#wifi_randomization_args[@]}" -gt 0 ]]; then
+  if is_grapheneos_build; then
     log "Disabling Wi-Fi MAC randomization for $WIFI_SSID"
   fi
-  if [[ "$WIFI_SECURITY" == "open" ]]; then
-    adb shell cmd wifi add-network "$WIFI_SSID" open "${wifi_randomization_args[@]}" >/dev/null
-    adb shell cmd wifi connect-network "$WIFI_SSID" open "${wifi_randomization_args[@]}"
-  else
-    adb shell cmd wifi add-network "$WIFI_SSID" "$WIFI_SECURITY" "$WIFI_PASSPHRASE" "${wifi_randomization_args[@]}" >/dev/null
-    adb shell cmd wifi connect-network "$WIFI_SSID" "$WIFI_SECURITY" "$WIFI_PASSPHRASE" "${wifi_randomization_args[@]}"
-  fi
+  connect_profile_wifi
   sleep 8
 else
   warn "WIFI_SSID is empty in $PROFILE_FILE; skipping Wi-Fi provisioning"
@@ -131,3 +119,14 @@ If sshd is not already running, do this once on the phone inside Termux:
 Expected SSH username: ${termux_user:-unknown}
 Detected Wi-Fi IP: ${wifi_ip:-unknown}
 EOF
+
+if ! adb shell 'pgrep -x sshd >/dev/null 2>&1'; then
+  if [[ -t 0 ]]; then
+    print_manual_block "If sshd is not already running, do this once on the phone inside Termux:
+  ./setup.sh
+"
+    wait_for_enter "Press Enter after running ./setup.sh in Termux: "
+  else
+    warn "sshd is not running yet; open Termux on the phone and run ./setup.sh once before continuing."
+  fi
+fi

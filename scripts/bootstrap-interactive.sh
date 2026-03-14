@@ -90,6 +90,45 @@ wifi_mac_randomization_disabled_for_profile() {
   [[ "$setting" == '0' ]]
 }
 
+reconcile_runtime_policies() {
+  local changed=0
+
+  ensure_adb_ready
+
+  if [[ -n "${WIFI_SSID:-}" ]] && is_grapheneos_build && ! wifi_mac_randomization_disabled_for_profile; then
+    log "Re-applying Wi-Fi configuration for $WIFI_SSID to disable MAC randomization"
+    connect_profile_wifi
+    sleep 8
+    changed=1
+  fi
+
+  if grapheneos_updater_disabled; then
+    :
+  else
+    log "Re-applying updater policy"
+    "$SCRIPT_DIR/configure-system-updater.sh" disable
+    changed=1
+  fi
+
+  if [[ "$RUNTIME_ROOT_READY" == "1" && "$RUNTIME_MAGISK_APP_READY" == "1" ]]; then
+    if [[ "$(magisk_su_notification_ui_effective_value)" != "0" ]] \
+      || [[ "$(magisk_policy_notification_effective_value_by_uid 2000)" != "0" ]]; then
+      log "Re-applying Magisk shell notification policy"
+      bash "$SCRIPT_DIR/configure-magisk-notifications.sh" disable shell
+      changed=1
+    fi
+
+    if [[ "$RUNTIME_TERMUX_READY" == "1" ]] \
+      && [[ "$(magisk_policy_notification_effective_value_for_package com.termux)" != "0" ]]; then
+      log "Re-applying Magisk Termux notification policy"
+      bash "$SCRIPT_DIR/configure-magisk-notifications.sh" disable com.termux || true
+      changed=1
+    fi
+  fi
+
+  return "$changed"
+}
+
 print_workflow_plan() {
   printf 'Planned actions during this run:\n'
   printf '  - inspect the connected device and resume from the detected state\n'
@@ -357,12 +396,12 @@ print_resume_summary() {
       printf '  - Wi-Fi MAC randomization disabled for %s: %s\n' "$WIFI_SSID" "$mac_randomization_disabled"
     fi
     if [[ "$RUNTIME_ROOT_READY" == "1" && "$RUNTIME_MAGISK_APP_READY" == "1" ]]; then
-      magisk_ui_notification=$(magisk_su_notification_ui_value 2>/dev/null || printf unknown)
+      magisk_ui_notification=$(magisk_su_notification_ui_effective_value)
       printf '  - Magisk UI Superuser notification: %s\n' "$(magisk_ui_notification_label "$magisk_ui_notification")"
-      shell_notification=$(magisk_policy_notification_value_by_uid 2000 2>/dev/null || printf unknown)
+      shell_notification=$(magisk_policy_notification_effective_value_by_uid 2000)
       printf '  - Magisk shell grant notification disabled: %s\n' "$(magisk_policy_notification_disabled_label "$shell_notification")"
       if [[ "$RUNTIME_TERMUX_READY" == "1" ]]; then
-        termux_notification=$(magisk_policy_notification_value_for_package com.termux 2>/dev/null || printf unknown)
+        termux_notification=$(magisk_policy_notification_effective_value_for_package com.termux)
         printf '  - Magisk Termux grant notification disabled: %s\n' "$(magisk_policy_notification_disabled_label "$termux_notification")"
       fi
     fi
@@ -489,6 +528,8 @@ On the phone:
   - Open Magisk.
   - Set Superuser access to 'Apps and ADB'.
   - Grant root for Shell / com.android.shell when prompted.
+  - If the Superuser tab is greyed out, complete any Magisk additional setup prompt and reopen the app.
+  - If Superuser stays greyed out, rerun ./scripts/root-magisk.sh for this device to restore the Magisk manager/root pairing.
 "
     wait_for_enter "Press Enter to retry shell root: "
   done
@@ -620,7 +661,12 @@ fi
 log "Step 6/7: Provisioning Wi-Fi, updater policy, Magisk notification policy, battery tuning, Termux and SSH"
 refresh_runtime_state
 if [[ "$RUNTIME_SSH_READY" == "1" && "$RUNTIME_TERMUX_SETUP_HELPER_READY" == "1" && "$RUNTIME_TERMUX_BOOT_SCRIPT_READY" == "1" ]]; then
-  log "SSH is already reachable; skipping provisioning step."
+  if reconcile_runtime_policies; then
+    log "SSH is already reachable and runtime policies are already applied; skipping provisioning step."
+  else
+    log "SSH is already reachable; repaired drifted runtime policies."
+  fi
+  refresh_runtime_state
   mark_state STATE_PROVISIONED
 else
   if [[ "$RUNTIME_SSH_READY" == "1" ]]; then
@@ -642,9 +688,9 @@ log "Step 7/7: Final SSH and always-on validation"
 ssh_port_open "$wifi_ip" "$TERMUX_SSH_PORT" || die "SSH port $TERMUX_SSH_PORT is not reachable on $wifi_ip"
 wait_for_termux_runtime_validation
 
-magisk_ui_notification=$(magisk_su_notification_ui_value 2>/dev/null || printf unknown)
-shell_notification=$(magisk_policy_notification_value_by_uid 2000 2>/dev/null || printf unknown)
-termux_notification=$(magisk_policy_notification_value_for_package com.termux 2>/dev/null || printf unknown)
+magisk_ui_notification=$(magisk_su_notification_ui_effective_value)
+shell_notification=$(magisk_policy_notification_effective_value_by_uid 2000)
+termux_notification=$(magisk_policy_notification_effective_value_for_package com.termux)
 if [[ -n "${WIFI_SSID:-}" ]]; then
   if wifi_mac_randomization_disabled_for_profile; then
     mac_randomization_disabled='yes'
