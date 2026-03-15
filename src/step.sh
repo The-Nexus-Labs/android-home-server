@@ -87,7 +87,19 @@ step_run_indented() {
     }
 
     print_manual_block() {
-      printf '\n%s\n\n' "$1"
+      local text=$1
+      local line
+
+      if [[ -r /dev/tty && -w /dev/tty ]]; then
+        printf '\n' > /dev/tty
+        while IFS= read -r line || [[ -n "$line" ]]; do
+          printf '    %s\n' "$line" > /dev/tty
+        done <<< "$text"
+        printf '\n' > /dev/tty
+        return 0
+      fi
+
+      printf '\n%s\n\n' "$text"
     }
 
     "$@"

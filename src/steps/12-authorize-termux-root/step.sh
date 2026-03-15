@@ -53,18 +53,8 @@ step_apply() {
   [[ -n "$termux_uid" ]] || die 'failed to resolve com.termux uid'
 
   log 'Staging the Termux root approval helper'
-  adb push "$helper_local" "$helper_remote" >/dev/null
+  adb push "$helper_local" "$helper_remote" >/dev/null 2>&1
   adb_root "mkdir -p /data/data/com.termux/files/home/.termux && cat '$helper_remote' > /data/data/com.termux/files/home/grant-root.sh && printf 'allow-external-apps=true\n' > /data/data/com.termux/files/home/.termux/termux.properties && chown -R ${termux_uid}:${termux_uid} /data/data/com.termux/files/home && chmod 700 /data/data/com.termux/files/home/grant-root.sh"
 
-  print_manual_block "Grant Termux root in Magisk now.
-
-On the phone:
-  1. Open Magisk.
-  2. Open Termux.
-  3. Run:
-       ./grant-root.sh
-  4. Approve the Termux root request if asked.
-  5. Return here.
-"
-  wait_for_termux_root_access
+  wait_for_termux_root_access 'Grant Termux root in Magisk now.'
 }

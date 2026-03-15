@@ -392,12 +392,14 @@ On the phone:
 }
 
 wait_for_termux_root_access() {
+  local heading=${1:-Grant Termux root in Magisk now.}
+
   while true; do
     if termux_root_enabled_present; then
       return 0
     fi
 
-    print_manual_block "Termux still needs root access in Magisk.
+    print_manual_block "$heading
 
 On the phone:
   1. Open Magisk.
@@ -408,6 +410,7 @@ On the phone:
   5. Return here.
 "
     wait_for_enter 'Press Enter after Termux root has been granted: '
+    heading='Termux still needs root access in Magisk.'
   done
 }
 
