@@ -42,7 +42,7 @@ step_guide() {
 This final step confirms that the Android device behaves like a home server and reruns every earlier step check.
 
 If SSH is not reachable yet, finish these actions on the phone:
-  1. Open Magisk and grant root to Termux if asked.
+  1. Make sure the Termux root authorization step has completed.
   2. Open Termux.
   3. Run:
        ./setup.sh
@@ -69,6 +69,10 @@ step_apply() {
   [[ -n "$wifi_ip" ]] || die 'failed to detect wlan0 IP after provisioning'
 
   if [[ "$RUNTIME_SSH_READY" != '1' ]]; then
+    if ! termux_root_enabled_present; then
+      "$RUN_STEP" authorize-termux-root apply
+      refresh_runtime_state
+    fi
     wait_for_termux_bootstrap "$wifi_ip"
   fi
 

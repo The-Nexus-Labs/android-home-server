@@ -64,11 +64,12 @@ If something fails, run `make interactive` again. The workflow is designed to re
 9. Disable the OS update client.
 10. Install the Magisk battery-tuning service.
 11. Install Termux and Termux:Boot.
-12. Stage the Termux bootstrap and SSH configuration.
-13. Disable the Magisk UI Superuser notification.
-14. Disable the Magisk shell grant notification.
-15. Disable the Magisk Termux grant notification.
-16. Verify SSH and rerun every earlier step check.
+12. Authorize Termux root in Magisk.
+13. Configure the Termux SSH service.
+14. Disable the Magisk UI Superuser notification.
+15. Disable the Magisk shell grant notification.
+16. Disable the Magisk Termux grant notification.
+17. Verify SSH and rerun every earlier step check.
 
 ## 👆 Manual steps still required
 
@@ -77,6 +78,7 @@ If something fails, run `make interactive` again. The workflow is designed to re
 - re-enable `USB debugging` after flashing
 - grant Magisk permissions
 - open Termux manually if Android blocks automation
+- run `./grant-root.sh` before `./setup.sh` when Termux still needs root approval
 
 ## Docs
 

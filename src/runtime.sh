@@ -141,6 +141,7 @@ refresh_runtime_state() {
   RUNTIME_TERMUX_BOOT_READY=0
   RUNTIME_TERMUX_SETUP_HELPER_READY=0
   RUNTIME_TERMUX_BOOT_SCRIPT_READY=0
+  RUNTIME_TERMUX_ROOT_READY=0
   RUNTIME_MAGISK_SERVICE_READY=0
   RUNTIME_SSH_READY=0
   RUNTIME_WIFI_IP=
@@ -173,6 +174,9 @@ refresh_runtime_state() {
     fi
     if termux_boot_script_present; then
       RUNTIME_TERMUX_BOOT_SCRIPT_READY=1
+    fi
+    if termux_root_enabled_present; then
+      RUNTIME_TERMUX_ROOT_READY=1
     fi
     if adb_root 'test -f /data/adb/service.d/20-home-server-tuning.sh' >/dev/null 2>&1; then
       RUNTIME_MAGISK_SERVICE_READY=1
@@ -207,6 +211,7 @@ print_resume_summary() {
     printf '  - shell root available: %s\n' "$([[ "$RUNTIME_ROOT_READY" == "1" ]] && printf yes || printf no)"
     printf '  - Termux installed: %s\n' "$([[ "$RUNTIME_TERMUX_READY" == "1" ]] && printf yes || printf no)"
     printf '  - Termux:Boot installed: %s\n' "$([[ "$RUNTIME_TERMUX_BOOT_READY" == "1" ]] && printf yes || printf no)"
+    printf '  - Termux root granted in Magisk: %s\n' "$([[ "$RUNTIME_TERMUX_ROOT_READY" == "1" ]] && printf yes || printf no)"
     printf '  - setup helper present: %s\n' "$([[ "$RUNTIME_TERMUX_SETUP_HELPER_READY" == "1" ]] && printf yes || printf no)"
     printf '  - Termux boot script present: %s\n' "$([[ "$RUNTIME_TERMUX_BOOT_SCRIPT_READY" == "1" ]] && printf yes || printf no)"
     printf '  - Magisk battery tuning script present: %s\n' "$([[ "$RUNTIME_MAGISK_SERVICE_READY" == "1" ]] && printf yes || printf no)"
@@ -266,7 +271,8 @@ print_workflow_plan() {
   printf '  - disable the GrapheneOS system updater package\n'
   printf '  - install the Magisk battery-tuning service script\n'
   printf '  - install Termux and Termux:Boot\n'
-  printf '  - stage the Termux bootstrap and SSH configuration\n'
+  printf '  - authorize Termux root in Magisk\n'
+  printf '  - configure the Termux SSH service\n'
   printf '  - disable Magisk root-granted notifications for shell and Termux\n'
   printf '  - validate SSH reachability and always-on Termux checks\n\n'
 }
@@ -283,7 +289,7 @@ ensure_fastboot_ready() {
     return 0
   fi
   if adb_ready; then
-    log 'Rebooting the device into Fastboot Mode'
+    print_step_detail 'Rebooting the device into Fastboot Mode.'
     adb reboot bootloader
     sleep 5
   fi
@@ -385,6 +391,26 @@ On the phone:
   done
 }
 
+wait_for_termux_root_access() {
+  while true; do
+    if termux_root_enabled_present; then
+      return 0
+    fi
+
+    print_manual_block "Termux still needs root access in Magisk.
+
+On the phone:
+  1. Open Magisk.
+  2. Open Termux.
+  3. Run:
+       ./grant-root.sh
+  4. Approve the Termux root request if asked.
+  5. Return here.
+"
+    wait_for_enter 'Press Enter after Termux root has been granted: '
+  done
+}
+
 wait_for_termux_bootstrap() {
   local host=$1
 
@@ -396,12 +422,11 @@ wait_for_termux_bootstrap() {
     print_manual_block "Termux bootstrap still needs a manual finish.
 
 On the phone:
-  1. Open Magisk and grant root to Termux if a prompt appears.
-  2. Open Termux.
-  3. Run:
+  1. Open Termux.
+  2. Run:
        ./setup.sh
-  4. Leave Termux open for 10 seconds.
-  5. Return here.
+  3. Leave Termux open for 10 seconds.
+  4. Return here.
 "
     wait_for_enter 'Press Enter after running ./setup.sh in Termux: '
   done
@@ -457,6 +482,12 @@ wait_for_termux_runtime_validation() {
       return 0
     fi
 
+    if [[ "$termux_root" != "1" ]]; then
+      warn 'Termux root is not granted yet; returning to the Termux root authorization step.'
+      "$RUN_STEP" authorize-termux-root apply
+      continue
+    fi
+
     if [[ "$setup_helper" != "1" ]]; then
       warn 'Termux setup helper is missing; restaging the bootstrap files.'
       "$RUN_STEP" stage-termux-bootstrap apply
@@ -477,11 +508,10 @@ Current checks:
   - wake lock detected: $([[ "$wake_lock" == "1" ]] && printf yes || printf no)
 
 On the phone:
-  1. Open Magisk and grant root to Termux if it is not already granted.
-  2. Open Termux.
-  3. Run:
+  1. Open Termux.
+  2. Run:
        ./setup.sh
-  4. Leave Termux open for a few seconds.
+  3. Leave Termux open for a few seconds.
 "
     wait_for_enter 'Press Enter after rerunning the Termux setup command: '
   done

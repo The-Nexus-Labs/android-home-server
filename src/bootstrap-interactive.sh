@@ -120,7 +120,7 @@ if [[ "$INTERACTIVE_FORCE" == '1' ]]; then
   printf '    %sForce mode enabled: GrapheneOS will be reflashed and every post-flash step will be rerun.%s\n' "$(color_red 2>/dev/null || true)" "$(color_reset 2>/dev/null || true)"
 fi
 
-print_step_header 'Step 1/16: Inspect the connected device'
+print_step_header 'Step 1/17: Inspect the connected device'
 if adb_ready; then
   "$RUN_STEP" inspect-device apply
 elif fastboot_ready; then
@@ -143,9 +143,9 @@ if [[ "$RUNTIME_GRAPHENEOS_READY" != '1' ]] && ! step_completed flash-grapheneos
   wait_for_enter 'Press Enter when the phone is ready for download and flashing: '
 fi
 
-run_step_if_needed 2 16 prepare-assets --download
+run_step_if_needed 2 17 prepare-assets --download
 
-print_step_header 'Step 3/16: Unlock the bootloader if needed'
+print_step_header 'Step 3/17: Unlock the bootloader if needed'
 refresh_runtime_state
 if [[ "$RUNTIME_BOOTLOADER_UNLOCKED" == '1' ]] || step_completed unlock-bootloader; then
   print_step_detail 'Bootloader already unlocked; skipping unlock step.'
@@ -159,14 +159,14 @@ fi
 
 refresh_runtime_state
 if [[ "$INTERACTIVE_FORCE" == '1' ]]; then
-  print_manual_block 'Force mode will reflash GrapheneOS. Put the device into Fastboot Mode now.'
+  print_step_detail 'Force mode will reflash GrapheneOS. Put the device into Fastboot Mode now.'
   ensure_fastboot_ready
 elif [[ "$RUNTIME_GRAPHENEOS_READY" != '1' ]] && ! step_completed flash-grapheneos; then
   print_manual_block 'If the phone wiped and rebooted after unlocking, return it to Fastboot Mode now.'
   ensure_fastboot_ready
 fi
 
-print_step_header 'Step 4/16: Flash GrapheneOS'
+print_step_header 'Step 4/17: Flash GrapheneOS'
 refresh_runtime_state
 if [[ "$INTERACTIVE_FORCE" == '1' ]]; then
   print_step_detail 'Force mode enabled; reflashing GrapheneOS.'
@@ -196,19 +196,11 @@ fi
 
 refresh_runtime_state
 if [[ "$RUNTIME_GRAPHENEOS_READY" != '1' ]]; then
-  print_manual_block "Complete the first GrapheneOS boot on the phone now.
-
-Required on-device actions:
-  1. Finish setup.
-  2. Re-enable Developer options.
-  3. Re-enable OEM unlocking.
-  4. Re-enable USB debugging.
-  5. Accept the ADB prompt.
-"
+  print_step_detail 'Waiting for Android to boot and for ADB authorization to come back.'
   wait_for_adb_ready
 fi
 
-print_step_header 'Step 5/16: Install Magisk root'
+print_step_header 'Step 5/17: Install Magisk root'
 refresh_runtime_state
 if [[ "$INTERACTIVE_FORCE" == '1' ]]; then
   print_step_detail 'Force mode enabled; reinstalling Magisk root.'
@@ -232,17 +224,18 @@ else
   mark_step_complete install-magisk-root
 fi
 
-run_step_if_needed 6 16 connect-wifi
-run_step_if_needed 7 16 disable-wifi-mac-randomization
-run_step_if_needed 8 16 enable-wifi-send-device-name
-run_step_if_needed 9 16 disable-system-updater
-run_step_if_needed 10 16 install-magisk-service
-run_step_if_needed 11 16 install-termux
-run_step_if_needed 12 16 stage-termux-bootstrap
-run_step_if_needed 13 16 disable-magisk-ui-notification
-run_step_if_needed 14 16 disable-magisk-shell-notification
-run_step_if_needed 15 16 disable-magisk-termux-notification
+run_step_if_needed 6 17 connect-wifi
+run_step_if_needed 7 17 disable-wifi-mac-randomization
+run_step_if_needed 8 17 enable-wifi-send-device-name
+run_step_if_needed 9 17 disable-system-updater
+run_step_if_needed 10 17 install-magisk-service
+run_step_if_needed 11 17 install-termux
+run_step_if_needed 12 17 authorize-termux-root
+run_step_if_needed 13 17 stage-termux-bootstrap
+run_step_if_needed 14 17 disable-magisk-ui-notification
+run_step_if_needed 15 17 disable-magisk-shell-notification
+run_step_if_needed 16 17 disable-magisk-termux-notification
 
-print_step_header 'Step 16/16: Verify SSH and re-check every step'
+print_step_header 'Step 17/17: Verify SSH and re-check every step'
 "$RUN_STEP" verify-final-state apply
 mark_step_complete verify-final-state

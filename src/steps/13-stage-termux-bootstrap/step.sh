@@ -5,7 +5,7 @@ step_id() {
 }
 
 step_name() {
-  printf 'Stage the Termux bootstrap and SSH configuration\n'
+  printf 'Configure the Termux SSH service\n'
 }
 
 step_state_key() {
@@ -27,7 +27,7 @@ step_guide() {
   cat <<'EOF'
 This step stages the Termux setup script and boot script over ADB and waits until SSH is reachable.
 
-If the automatic bootstrap does not finish on its own, you will open Termux and run:
+If the automatic bootstrap does not finish on its own, open Termux and run:
   ./setup.sh
 EOF
 }
@@ -43,6 +43,10 @@ step_apply() {
 
   if ! adb_package_installed com.termux; then
     die 'Termux is not installed yet; run ./src/run-step.sh install-termux apply first'
+  fi
+
+  if ! termux_root_enabled_present; then
+    die 'Termux root is not authorized yet; run ./src/run-step.sh authorize-termux-root apply first'
   fi
 
   bootstrap_local="$TERMUX_BOOTSTRAP_STEP_DIR/assets/termux-bootstrap.sh"
@@ -101,11 +105,10 @@ EOF
 Connection details saved to: $connection_out
 
 On the phone:
-  1. Open Magisk and grant root to Termux if a prompt appears.
-  2. Open Termux.
-  3. Run:
+  1. Open Termux.
+  2. Run:
        ./setup.sh
-  4. Leave Termux open for 10 seconds.
+  3. Leave Termux open for 10 seconds.
 
 Expected SSH username: ${termux_user:-unknown}
 Detected Wi-Fi IP: ${wifi_ip:-unknown}
