@@ -15,6 +15,7 @@ ensure_dirs
 termux_apk="$DOWNLOAD_DIR/$(manifest_value termux.apk_name)"
 termux_boot_apk="$DOWNLOAD_DIR/$(manifest_value termux_boot.apk_name)"
 idle_script_local="$PROJECT_ROOT/payloads/magisk-disable-idle.sh"
+idle_script_generated="$ARTIFACT_ROOT/magisk-disable-idle.generated.sh"
 bootstrap_local="$PROJECT_ROOT/payloads/termux-bootstrap.sh"
 bootstrap_generated="$ARTIFACT_ROOT/termux-bootstrap.generated.sh"
 connection_out="$ARTIFACT_ROOT/ssh-connection.txt"
@@ -35,15 +36,30 @@ if [[ -n "${WIFI_SSID:-}" ]]; then
   log "Connecting device Wi-Fi to $WIFI_SSID"
   if is_grapheneos_build; then
     log "Disabling Wi-Fi MAC randomization for $WIFI_SSID"
+    log "Enabling Wi-Fi Send device name for $WIFI_SSID"
   fi
-  connect_profile_wifi
-  sleep 8
+  ensure_profile_wifi_connected_without_randomization
 else
   warn "WIFI_SSID is empty in $PROFILE_FILE; skipping Wi-Fi provisioning"
 fi
 
+wifi_send_device_name_restriction=0
+if is_grapheneos_build && [[ -n "${WIFI_SSID:-}" ]]; then
+  wifi_send_device_name_restriction=$(wifi_send_device_name_restriction_flags_for_profile)
+fi
+
+python3 - <<'PY' "$idle_script_local" "$idle_script_generated" "$wifi_send_device_name_restriction"
+from pathlib import Path
+import sys
+
+src, dst, restriction = sys.argv[1:4]
+content = Path(src).read_text(encoding='utf-8')
+content = content.replace('__WIFI_SEND_DHCP_HOSTNAME_RESTRICTION__', restriction)
+Path(dst).write_text(content, encoding='utf-8')
+PY
+
 log "Installing battery-tuning script into Magisk service.d"
-adb push "$idle_script_local" "$idle_script_remote" >/dev/null
+adb push "$idle_script_generated" "$idle_script_remote" >/dev/null
 adb_root "mkdir -p /data/adb/service.d && cat '$idle_script_remote' > /data/adb/service.d/20-home-server-tuning.sh && chmod 755 /data/adb/service.d/20-home-server-tuning.sh && /data/adb/service.d/20-home-server-tuning.sh"
 
 if adb_package_installed com.termux; then

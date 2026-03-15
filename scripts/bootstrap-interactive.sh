@@ -76,7 +76,7 @@ grapheneos_updater_disabled() {
 }
 
 wifi_mac_randomization_disabled_for_profile() {
-  local setting
+  local setting current_mac
   [[ -n "${WIFI_SSID:-}" ]] || return 1
 
   setting=$(adb shell dumpsys wifi 2>/dev/null | awk -v ssid="$WIFI_SSID" '
@@ -87,7 +87,14 @@ wifi_mac_randomization_disabled_for_profile() {
     }
   ')
 
-  [[ "$setting" == '0' ]]
+  [[ "$setting" == '0' ]] || return 1
+
+  current_mac=$(wifi_current_mac_for_profile 2>/dev/null || true)
+  if [[ -n "$current_mac" ]] && mac_address_is_locally_administered "$current_mac"; then
+    return 1
+  fi
+
+  return 0
 }
 
 reconcile_runtime_policies() {
@@ -95,10 +102,10 @@ reconcile_runtime_policies() {
 
   ensure_adb_ready
 
-  if [[ -n "${WIFI_SSID:-}" ]] && is_grapheneos_build && ! wifi_mac_randomization_disabled_for_profile; then
-    log "Re-applying Wi-Fi configuration for $WIFI_SSID to disable MAC randomization"
-    connect_profile_wifi
-    sleep 8
+  if [[ -n "${WIFI_SSID:-}" ]] && is_grapheneos_build \
+    && { ! wifi_mac_randomization_disabled_for_profile || ! wifi_send_device_name_enabled_for_profile; }; then
+    log "Re-applying Wi-Fi configuration for $WIFI_SSID to enforce GrapheneOS Wi-Fi privacy settings"
+    ensure_profile_wifi_connected_without_randomization
     changed=1
   fi
 
@@ -141,6 +148,7 @@ print_workflow_plan() {
     printf '  - connect Wi-Fi to %s\n' "$WIFI_SSID"
     if is_grapheneos_build; then
       printf '  - disable GrapheneOS Wi-Fi MAC randomization for %s\n' "$WIFI_SSID"
+      printf '  - enable GrapheneOS Send device name for %s\n' "$WIFI_SSID"
     fi
   else
     printf '  - skip Wi-Fi provisioning because WIFI_SSID is empty\n'
@@ -363,6 +371,7 @@ refresh_runtime_state() {
 print_resume_summary() {
   local updater_disabled='unknown'
   local mac_randomization_disabled='unknown'
+  local send_device_name_enabled='unknown'
   local magisk_ui_notification='unknown'
   local shell_notification='unknown'
   local termux_notification='unknown'
@@ -392,8 +401,14 @@ print_resume_summary() {
       else
         mac_randomization_disabled='no'
       fi
+      if is_grapheneos_build && wifi_send_device_name_enabled_for_profile; then
+        send_device_name_enabled='yes'
+      else
+        send_device_name_enabled='no'
+      fi
       printf '  - configured Wi-Fi SSID: %s\n' "$WIFI_SSID"
       printf '  - Wi-Fi MAC randomization disabled for %s: %s\n' "$WIFI_SSID" "$mac_randomization_disabled"
+      printf '  - Wi-Fi Send device name enabled for %s: %s\n' "$WIFI_SSID" "$send_device_name_enabled"
     fi
     if [[ "$RUNTIME_ROOT_READY" == "1" && "$RUNTIME_MAGISK_APP_READY" == "1" ]]; then
       magisk_ui_notification=$(magisk_su_notification_ui_effective_value)
@@ -697,8 +712,14 @@ if [[ -n "${WIFI_SSID:-}" ]]; then
   else
     mac_randomization_disabled='no'
   fi
+  if is_grapheneos_build && wifi_send_device_name_enabled_for_profile; then
+    send_device_name_enabled='yes'
+  else
+    send_device_name_enabled='no'
+  fi
 else
   mac_randomization_disabled='unknown'
+  send_device_name_enabled='unknown'
 fi
 if grapheneos_updater_disabled; then
   updater_disabled='yes'
@@ -721,6 +742,7 @@ SSH endpoint:
 Detailed outcome:
   Wi-Fi SSID: ${WIFI_SSID:-not configured}
   GrapheneOS Wi-Fi MAC randomization disabled: $mac_randomization_disabled
+  GrapheneOS Wi-Fi Send device name enabled: $send_device_name_enabled
   GrapheneOS updater disabled: $updater_disabled
   Magisk UI Superuser notification: $(magisk_ui_notification_label "$magisk_ui_notification")
   Magisk shell grant notification disabled: $(magisk_policy_notification_disabled_label "$shell_notification")
