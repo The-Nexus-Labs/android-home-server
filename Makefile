@@ -1,12 +1,15 @@
 PROFILE ?=
 PYTHON ?= python3
+ACTION ?= run
 
-.PHONY: help preflight manifest download unlock flash root provision interactive updates-disable updates-enable updates-status ota-manual ota-auto ota-status
+.PHONY: help preflight manifest download unlock flash root provision interactive step updates-disable updates-enable updates-status ota-manual ota-auto ota-status
 
 help:
 	@printf '%s\n' \
 	  'Targets:' \
 	  '  PROFILE=...    - optional profile file; defaults to auto-detecting config/<codename>.env' \
+	  '  STEP=...       - step key for make step (for example connect-wifi)' \
+	  '  ACTION=...     - run, apply, test, guide or name for make step' \
 	  '  make preflight   - inspect the connected device' \
 	  '  make manifest    - build the pinned asset manifest only' \
 	  '  make download    - download and verify GrapheneOS, Magisk, Termux assets' \
@@ -16,35 +19,36 @@ help:
 	  '  make updates-disable - disable the OS update client' \
 	  '  make updates-enable  - re-enable the OS update client' \
 	  '  make updates-status  - print current OS update-client mode' \
-	  '  make provision   - install Termux, disable idle, set up SSH/Wi-Fi' \
+	  '  make provision   - run the provisioning steps after root is ready' \
+	  '  make step        - run one step from src/steps via the step runner' \
 	  '  make interactive - run the full guided workflow with on-device instructions'
 
 preflight:
-	PROFILE="$(PROFILE)" ./scripts/preflight.sh
+	PROFILE="$(PROFILE)" ./src/run-step.sh inspect-device apply
 
 manifest:
-	PROFILE="$(PROFILE)" ./scripts/download-assets.sh --manifest-only
+	PROFILE="$(PROFILE)" ./src/run-step.sh prepare-assets apply --manifest-only
 
 download:
-	PROFILE="$(PROFILE)" ./scripts/download-assets.sh --download
+	PROFILE="$(PROFILE)" ./src/run-step.sh prepare-assets apply --download
 
 unlock:
-	PROFILE="$(PROFILE)" ./scripts/unlock-bootloader.sh
+	PROFILE="$(PROFILE)" ./src/run-step.sh unlock-bootloader apply
 
 flash:
-	PROFILE="$(PROFILE)" ./scripts/flash-grapheneos.sh
+	PROFILE="$(PROFILE)" ./src/run-step.sh flash-grapheneos apply
 
 root:
-	PROFILE="$(PROFILE)" ./scripts/root-magisk.sh
+	PROFILE="$(PROFILE)" ./src/run-step.sh install-magisk-root apply
 
 updates-disable:
-	PROFILE="$(PROFILE)" ./scripts/configure-system-updater.sh disable
+	PROFILE="$(PROFILE)" ./src/run-step.sh disable-system-updater apply disable
 
 updates-enable:
-	PROFILE="$(PROFILE)" ./scripts/configure-system-updater.sh enable
+	PROFILE="$(PROFILE)" ./src/run-step.sh disable-system-updater apply enable
 
 updates-status:
-	PROFILE="$(PROFILE)" ./scripts/configure-system-updater.sh status
+	PROFILE="$(PROFILE)" ./src/run-step.sh disable-system-updater apply status
 
 ota-manual: updates-disable
 
@@ -53,7 +57,21 @@ ota-auto: updates-enable
 ota-status: updates-status
 
 provision:
-	PROFILE="$(PROFILE)" ./scripts/postflash-provision.sh
+	PROFILE="$(PROFILE)" ./src/run-step.sh connect-wifi run
+	PROFILE="$(PROFILE)" ./src/run-step.sh disable-wifi-mac-randomization run
+	PROFILE="$(PROFILE)" ./src/run-step.sh enable-wifi-send-device-name run
+	PROFILE="$(PROFILE)" ./src/run-step.sh disable-system-updater apply disable
+	PROFILE="$(PROFILE)" ./src/run-step.sh install-magisk-service run
+	PROFILE="$(PROFILE)" ./src/run-step.sh install-termux run
+	PROFILE="$(PROFILE)" ./src/run-step.sh stage-termux-bootstrap run
+	PROFILE="$(PROFILE)" ./src/run-step.sh disable-magisk-ui-notification run
+	PROFILE="$(PROFILE)" ./src/run-step.sh disable-magisk-shell-notification run
+	PROFILE="$(PROFILE)" ./src/run-step.sh disable-magisk-termux-notification run
+	PROFILE="$(PROFILE)" ./src/run-step.sh verify-final-state apply
+
+step:
+	@test -n "$(STEP)" || { printf '%s\n' 'STEP is required, for example: make step STEP=connect-wifi'; exit 1; }
+	PROFILE="$(PROFILE)" ./src/run-step.sh "$(STEP)" "$(ACTION)"
 
 interactive:
-	PROFILE="$(PROFILE)" ./scripts/bootstrap-interactive.sh
+	@PROFILE="$(PROFILE)" ./src/bootstrap-interactive.sh
