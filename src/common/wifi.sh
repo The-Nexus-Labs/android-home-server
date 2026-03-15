@@ -64,6 +64,32 @@ wifi_send_device_name_restriction_enabled_for_profile() {
   (( (current & required) == required ))
 }
 
+wifi_service_ready() {
+  adb shell service check wifi 2>/dev/null \
+    | tr -d '\r' \
+    | grep -Eq 'Service[[:space:]]+wifi:[[:space:]]+found'
+}
+
+wait_for_wifi_service_ready() {
+  local attempt
+
+  for attempt in {1..20}; do
+    if ! adb_ready; then
+      warn 'ADB disconnected while applying Wi-Fi settings; waiting for the device to reconnect.'
+      wait_for_adb_ready
+    fi
+
+    if wifi_service_ready; then
+      adb_wait_for_root || true
+      return 0
+    fi
+
+    sleep 2
+  done
+
+  return 1
+}
+
 wifi_set_send_device_name_restriction_for_profile() {
   local current required target
 
@@ -92,6 +118,7 @@ wifi_reload_config_store_offline() {
   adb_root "cmd wifi set-wifi-enabled disabled >/dev/null 2>&1 || true; stop; sleep 5; cat '$staged_xml' > '$(wifi_config_store_path)' && chown system:system '$(wifi_config_store_path)' && chmod 600 '$(wifi_config_store_path)' && restorecon '$(wifi_config_store_path)'; start"
   adb_wait_for_boot_completed
   adb_wait_for_root
+  wait_for_wifi_service_ready
 }
 
 wifi_set_send_device_name_enabled_for_profile() {
