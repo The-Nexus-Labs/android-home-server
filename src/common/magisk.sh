@@ -194,3 +194,22 @@ magisk_policy_notification_effective_value_for_package() {
     printf '1\n'
   fi
 }
+
+magisk_policy_row_exists_by_uid() {
+  local uid=$1
+  local value
+
+  [[ "$uid" =~ ^[0-9]+$ ]] || die "invalid Magisk policy uid: $uid"
+
+  value=$(magisk_sqlite_scalar "SELECT COUNT(*) FROM policies WHERE uid=${uid};") || return 1
+  [[ "$value" =~ ^[1-9][0-9]*$ ]]
+}
+
+magisk_policy_row_exists_for_package() {
+  local package=$1
+  local uid
+
+  uid=$(adb_package_uid "$package")
+  [[ -n "$uid" ]] || return 1
+  magisk_policy_row_exists_by_uid "$uid"
+}

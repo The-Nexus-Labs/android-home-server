@@ -69,7 +69,7 @@ step_apply() {
   [[ -n "$wifi_ip" ]] || die 'failed to detect wlan0 IP after provisioning'
 
   if [[ "$RUNTIME_SSH_READY" != '1' ]]; then
-    if ! termux_root_enabled_present; then
+    if ! termux_root_grants_present; then
       "$RUN_STEP" authorize-termux-root apply
       refresh_runtime_state
     fi

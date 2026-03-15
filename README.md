@@ -78,7 +78,7 @@ If something fails, run `make interactive` again. The workflow is designed to re
 - re-enable `USB debugging` after flashing
 - grant Magisk permissions
 - open Termux manually if Android blocks automation
-- run `./grant-root.sh` before `./setup.sh` when Termux still needs root approval
+- grant Magisk Superuser access to both Termux and Termux:Boot before the SSH setup step
 
 ## Docs
 

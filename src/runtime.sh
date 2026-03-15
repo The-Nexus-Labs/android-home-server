@@ -70,8 +70,12 @@ termux_setup_helper_present() {
   adb_root 'test -f /data/data/com.termux/files/home/setup.sh' >/dev/null 2>&1
 }
 
+termux_root_grants_present() {
+  magisk_policy_row_exists_for_package com.termux && magisk_policy_row_exists_for_package com.termux.boot
+}
+
 termux_root_enabled_present() {
-  adb_root 'test -f /data/data/com.termux/files/home/termux-root-enabled.txt' >/dev/null 2>&1
+  termux_root_grants_present
 }
 
 termux_sshd_running() {
@@ -211,7 +215,7 @@ print_resume_summary() {
     printf '  - shell root available: %s\n' "$([[ "$RUNTIME_ROOT_READY" == "1" ]] && printf yes || printf no)"
     printf '  - Termux installed: %s\n' "$([[ "$RUNTIME_TERMUX_READY" == "1" ]] && printf yes || printf no)"
     printf '  - Termux:Boot installed: %s\n' "$([[ "$RUNTIME_TERMUX_BOOT_READY" == "1" ]] && printf yes || printf no)"
-    printf '  - Termux root granted in Magisk: %s\n' "$([[ "$RUNTIME_TERMUX_ROOT_READY" == "1" ]] && printf yes || printf no)"
+    printf '  - Termux and Termux:Boot granted in Magisk: %s\n' "$([[ "$RUNTIME_TERMUX_ROOT_READY" == "1" ]] && printf yes || printf no)"
     printf '  - setup helper present: %s\n' "$([[ "$RUNTIME_TERMUX_SETUP_HELPER_READY" == "1" ]] && printf yes || printf no)"
     printf '  - Termux boot script present: %s\n' "$([[ "$RUNTIME_TERMUX_BOOT_SCRIPT_READY" == "1" ]] && printf yes || printf no)"
     printf '  - Magisk battery tuning script present: %s\n' "$([[ "$RUNTIME_MAGISK_SERVICE_READY" == "1" ]] && printf yes || printf no)"
@@ -395,7 +399,7 @@ wait_for_termux_root_access() {
   local heading=${1:-Grant Termux root in Magisk now.}
 
   while true; do
-    if termux_root_enabled_present; then
+    if termux_root_grants_present; then
       return 0
     fi
 
@@ -403,14 +407,12 @@ wait_for_termux_root_access() {
 
 On the phone:
   1. Open Magisk.
-  2. Open Termux.
-  3. Run:
-       ./grant-root.sh
-  4. Approve the Termux root request if asked.
-  5. Return here.
+  2. Go to Superuser.
+  3. Grant root for Termux and Termux:Boot.
+  4. Return here.
 "
-    wait_for_enter 'Press Enter after Termux root has been granted: '
-    heading='Termux still needs root access in Magisk.'
+    wait_for_enter 'Press Enter after granting Termux and Termux:Boot root: '
+    heading='Termux root access is still not granted correctly in Magisk.'
   done
 }
 
@@ -455,7 +457,7 @@ wait_for_termux_runtime_validation() {
     if termux_setup_helper_present; then
       setup_helper=1
     fi
-    if termux_root_enabled_present; then
+    if termux_root_grants_present; then
       termux_root=1
       "$RUN_STEP" disable-magisk-termux-notification apply disable >/dev/null 2>&1 || true
     fi
@@ -486,7 +488,7 @@ wait_for_termux_runtime_validation() {
     fi
 
     if [[ "$termux_root" != "1" ]]; then
-      warn 'Termux root is not granted yet; returning to the Termux root authorization step.'
+      warn 'Termux or Termux:Boot root is not granted yet; returning to the Termux root authorization step.'
       "$RUN_STEP" authorize-termux-root apply
       continue
     fi
@@ -502,7 +504,7 @@ wait_for_termux_runtime_validation() {
 Current checks:
   - setup helper present: $([[ "$setup_helper" == "1" ]] && printf yes || printf no)
   - boot script present: $([[ "$boot_script" == "1" ]] && printf yes || printf no)
-  - Termux root granted in Magisk: $([[ "$termux_root" == "1" ]] && printf yes || printf no)
+  - Termux and Termux:Boot granted in Magisk: $([[ "$termux_root" == "1" ]] && printf yes || printf no)
   - sshd running: $([[ "$sshd_running" == "1" ]] && printf yes || printf no)
   - Termux standby bucket non-restrictive: $([[ "$termux_bucket" == "1" ]] && printf yes || printf no)
   - Termux:Boot standby bucket non-restrictive: $([[ "$termux_boot_bucket" == "1" ]] && printf yes || printf no)

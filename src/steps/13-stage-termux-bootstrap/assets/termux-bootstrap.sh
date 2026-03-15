@@ -39,10 +39,7 @@ require_termux_root() {
 
 start_sshd() {
   if command -v su >/dev/null 2>&1 && su -c true >/dev/null 2>&1; then
-    printf 'granted\n' > "$HOME/termux-root-enabled.txt"
     su -c 'pkill -x sshd >/dev/null 2>&1 || true' >/dev/null 2>&1 || true
-  else
-    rm -f "$HOME/termux-root-enabled.txt"
   fi
 
   pkill sshd 2>/dev/null || true
@@ -81,10 +78,7 @@ cat > ~/.termux/boot/10-home-server.sh <<EOF
 source "\$PREFIX/etc/profile"
 termux-wake-lock || true
 if command -v su >/dev/null 2>&1 && su -c true >/dev/null 2>&1; then
-  printf 'granted\n' > "\$HOME/termux-root-enabled.txt"
   su -c 'pkill -x sshd >/dev/null 2>&1 || true' >/dev/null 2>&1 || true
-else
-  rm -f "\$HOME/termux-root-enabled.txt"
 fi
 pkill sshd 2>/dev/null || true
 if command -v sv-enable >/dev/null 2>&1; then

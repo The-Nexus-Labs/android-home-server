@@ -45,7 +45,7 @@ step_apply() {
     die 'Termux is not installed yet; run ./src/run-step.sh install-termux apply first'
   fi
 
-  if ! termux_root_enabled_present; then
+  if ! termux_root_grants_present; then
     die 'Termux root is not authorized yet; run ./src/run-step.sh authorize-termux-root apply first'
   fi
 

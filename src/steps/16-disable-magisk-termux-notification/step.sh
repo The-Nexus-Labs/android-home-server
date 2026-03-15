@@ -23,11 +23,9 @@ This step disables the Magisk notification for Termux root grants.
 
 If Magisk says the Termux policy row does not exist yet:
   1. Open Magisk on the phone.
-  2. Open Termux.
-  3. Run:
-       ./grant-root.sh
-  4. Approve the Termux root request once.
-  5. Rerun this step.
+  2. Go to Superuser.
+  3. Grant root for Termux.
+  4. Rerun this step.
 EOF
 }
 
