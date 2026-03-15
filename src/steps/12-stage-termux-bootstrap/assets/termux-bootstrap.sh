@@ -57,6 +57,24 @@ start_sshd() {
   fi
 }
 
+configure_sshd() {
+  local sshd_config
+
+  sshd_config="$PREFIX/etc/ssh/sshd_config"
+  [[ -f "$sshd_config" ]] || {
+    echo "OpenSSH did not create $sshd_config"
+    return 1
+  }
+
+  if grep -Eq '^[#[:space:]]*Port ' "$sshd_config"; then
+    sed -Ei "s|^[#[:space:]]*Port .*|Port ${SSH_PORT}|" "$sshd_config"
+  else
+    printf '\nPort %s\n' "$SSH_PORT" >> "$sshd_config"
+  fi
+
+  sed -Ei '/^[[:space:]]*(AddressFamily|ListenAddress)[[:space:]]+/d' "$sshd_config"
+}
+
 mkdir -p ~/.termux/boot
 cat > ~/.termux/boot/10-home-server.sh <<EOF
 #!/data/data/com.termux/files/usr/bin/bash
@@ -79,15 +97,8 @@ fi
 EOF
 chmod 700 ~/.termux/boot/10-home-server.sh
 
-if grep -Eq '^[#[:space:]]*Port ' "$PREFIX/etc/ssh/sshd_config"; then
-  sed -Ei "s|^[#[:space:]]*Port .*|Port ${SSH_PORT}|" "$PREFIX/etc/ssh/sshd_config"
-else
-  printf '\nPort %s\n' "$SSH_PORT" >> "$PREFIX/etc/ssh/sshd_config"
-fi
-
-sed -Ei '/^[[:space:]]*(AddressFamily|ListenAddress)[[:space:]]+/d' "$PREFIX/etc/ssh/sshd_config"
-
 ensure_termux_packages
+configure_sshd
 
 rm -f "$HOME/.termux_authinfo"
 printf '%s\n%s\n' "$DEFAULT_PASS" "$DEFAULT_PASS" | passwd
