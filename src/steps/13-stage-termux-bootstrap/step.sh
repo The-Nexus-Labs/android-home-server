@@ -100,20 +100,9 @@ EOF
   if ssh_port_open "$wifi_ip" "$TERMUX_SSH_PORT"; then
     log 'Automatic Termux bootstrap completed and SSH is reachable.'
   else
-    print_manual_block "Finish the Termux bootstrap on the phone now.
-
-Connection details saved to: $connection_out
-
-On the phone:
-  1. Open Termux.
-  2. Run:
-       ./setup.sh
-  3. Leave Termux open for 10 seconds.
-
+    wait_for_termux_bootstrap "$wifi_ip" "Finish the Termux bootstrap on the phone now." "Connection details saved to: $connection_out
 Expected SSH username: ${termux_user:-unknown}
-Detected Wi-Fi IP: ${wifi_ip:-unknown}
-"
-    wait_for_termux_bootstrap "$wifi_ip"
+Detected Wi-Fi IP: ${wifi_ip:-unknown}"
   fi
 
   cat <<EOF

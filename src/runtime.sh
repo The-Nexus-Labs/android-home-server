@@ -418,15 +418,19 @@ On the phone:
 
 wait_for_termux_bootstrap() {
   local host=$1
+  local heading=${2:-Termux bootstrap still needs a manual finish.}
+  local details=${3:-}
 
   while true; do
     if ssh_port_open "$host" "$TERMUX_SSH_PORT"; then
       return 0
     fi
 
-    print_manual_block "Termux bootstrap still needs a manual finish.
+    print_manual_block "$heading
 
-On the phone:
+${details:+$details
+
+}On the phone:
   1. Open Termux.
   2. Run:
        ./setup.sh
@@ -434,6 +438,8 @@ On the phone:
   4. Return here.
 "
     wait_for_enter 'Press Enter after running ./setup.sh in Termux: '
+    heading='Termux bootstrap still needs a manual finish.'
+    details=
   done
 }
 
