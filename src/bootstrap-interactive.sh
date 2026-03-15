@@ -3,6 +3,37 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
+INTERACTIVE_FORCE=0
+
+usage() {
+  cat <<'EOF'
+usage: ./src/bootstrap-interactive.sh [--force]
+
+Options:
+  --force    Reflash GrapheneOS and rerun every post-flash step without skipping.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --force)
+      INTERACTIVE_FORCE=1
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      printf '[x] unsupported argument: %s\n' "$1" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+export INTERACTIVE_FORCE
+
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/common.sh"
 # shellcheck disable=SC1091
@@ -42,14 +73,23 @@ run_step_if_needed() {
   local number=$1
   local total=$2
   local step_key=$3
+  local force_step=0
 
   shift 3
 
+  if [[ "$INTERACTIVE_FORCE" == '1' ]] && (( number >= 5 )); then
+    force_step=1
+  fi
+
   print_step_header "Step $number/$total: $(step_label "$step_key")"
-  if "$RUN_STEP" "$step_key" test; then
+  if [[ "$force_step" != '1' ]] && "$RUN_STEP" "$step_key" test; then
     print_step_detail "$(step_label "$step_key") is already complete; skipping."
     mark_step_complete "$step_key"
     return 0
+  fi
+
+  if [[ "$force_step" == '1' ]]; then
+    print_step_detail 'Force mode enabled; rerunning this step.'
   fi
 
   "$RUN_STEP" "$step_key" apply "$@"
@@ -75,6 +115,10 @@ require_cmd python3
 ensure_dirs
 
 print_session_header
+
+if [[ "$INTERACTIVE_FORCE" == '1' ]]; then
+  printf '    %sForce mode enabled: GrapheneOS will be reflashed and every post-flash step will be rerun.%s\n' "$(color_red 2>/dev/null || true)" "$(color_reset 2>/dev/null || true)"
+fi
 
 print_step_header 'Step 1/16: Inspect the connected device'
 if adb_ready; then
@@ -114,14 +158,27 @@ else
 fi
 
 refresh_runtime_state
-if [[ "$RUNTIME_GRAPHENEOS_READY" != '1' ]] && ! step_completed flash-grapheneos; then
+if [[ "$INTERACTIVE_FORCE" == '1' ]]; then
+  print_manual_block 'Force mode will reflash GrapheneOS. Put the device into Fastboot Mode now.'
+  ensure_fastboot_ready
+elif [[ "$RUNTIME_GRAPHENEOS_READY" != '1' ]] && ! step_completed flash-grapheneos; then
   print_manual_block 'If the phone wiped and rebooted after unlocking, return it to Fastboot Mode now.'
   ensure_fastboot_ready
 fi
 
 print_step_header 'Step 4/16: Flash GrapheneOS'
 refresh_runtime_state
-if [[ "$RUNTIME_GRAPHENEOS_READY" == '1' ]]; then
+if [[ "$INTERACTIVE_FORCE" == '1' ]]; then
+  print_step_detail 'Force mode enabled; reflashing GrapheneOS.'
+  ensure_fastboot_ready
+  refresh_runtime_state
+  if [[ "$RUNTIME_BOOTLOADER_UNLOCKED" != '1' ]]; then
+    wait_for_bootloader_unlocked
+    ensure_fastboot_ready
+  fi
+  "$RUN_STEP" flash-grapheneos apply
+  mark_step_complete flash-grapheneos
+elif [[ "$RUNTIME_GRAPHENEOS_READY" == '1' ]]; then
   print_step_detail 'GrapheneOS is already installed; skipping flash step.'
   mark_step_complete flash-grapheneos
 elif step_completed flash-grapheneos && [[ "$RUNTIME_FASTBOOT_READY" == '1' ]]; then
@@ -153,7 +210,14 @@ fi
 
 print_step_header 'Step 5/16: Install Magisk root'
 refresh_runtime_state
-if [[ "$RUNTIME_ROOT_READY" == '1' ]]; then
+if [[ "$INTERACTIVE_FORCE" == '1' ]]; then
+  print_step_detail 'Force mode enabled; reinstalling Magisk root.'
+  ensure_adb_ready
+  "$RUN_STEP" install-magisk-root apply
+  wait_for_adb_ready
+  wait_for_root_ready
+  mark_step_complete install-magisk-root
+elif [[ "$RUNTIME_ROOT_READY" == '1' ]]; then
   print_step_detail 'Shell root is already available; skipping Magisk installation.'
   mark_step_complete install-magisk-root
 elif [[ "$RUNTIME_MAGISK_RUNTIME_READY" == '1' ]]; then

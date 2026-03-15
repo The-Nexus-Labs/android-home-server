@@ -34,6 +34,8 @@ However somewhat working screen is still required for the initial setup, as you 
 3. Run `make interactive`.
 4. Follow the on-device prompts.
 
+To reflash GrapheneOS and rerun every post-flash step without skipping, use `make interactive INTERACTIVE_ARGS=--force`.
+
 For an individual step, run `make step STEP=<step-key> ACTION=run`.
 Examples:
 
@@ -44,7 +46,7 @@ If something fails, run `make interactive` again. The workflow is designed to re
 
 ## 🧱 Layout
 
-- Shared shell code lives in [src](src).
+- Shared shell code lives in [src/common](src/common), with [src/common.sh](src/common.sh) acting as the compatibility loader.
 - Each provisioning step lives in its own folder under [src/steps](src/steps).
 - Every step module exposes the same shell interface: `step_name`, `step_is_done`, `step_apply`, and `step_guide`.
 - Step-owned payloads now live beside the step that installs or uses them.

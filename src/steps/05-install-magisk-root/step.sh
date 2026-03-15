@@ -51,7 +51,7 @@ step_apply() {
 
   log "Using boot image: $init_boot_img"
 
-  if step_is_done; then
+  if [[ "${INTERACTIVE_FORCE:-0}" != '1' ]] && step_is_done; then
     log 'Magisk root is already available; skipping root installation.'
     return 0
   fi

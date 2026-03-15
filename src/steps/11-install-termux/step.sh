@@ -26,12 +26,16 @@ EOF
 }
 
 step_apply() {
-  local termux_apk termux_boot_apk
+  local termux_apk termux_boot_apk force_reinstall=0
 
   require_cmd adb
   require_manifest
   assert_adb_device
   adb_root id >/dev/null 2>&1 || die 'root is not available yet; run ./src/run-step.sh install-magisk-root apply first'
+
+  if [[ "${INTERACTIVE_FORCE:-0}" == '1' ]]; then
+    force_reinstall=1
+  fi
 
   termux_apk="$DOWNLOAD_DIR/$(manifest_value termux.apk_name)"
   termux_boot_apk="$DOWNLOAD_DIR/$(manifest_value termux_boot.apk_name)"
@@ -40,14 +44,20 @@ step_apply() {
     [[ -f "$file" ]] || die "missing required file: $file"
   done
 
-  if adb_package_installed com.termux; then
+  if [[ "$force_reinstall" == '1' ]] && adb_package_installed com.termux; then
+    log 'Force mode enabled; reinstalling Termux'
+    adb install -r "$termux_apk" >/dev/null
+  elif adb_package_installed com.termux; then
     log 'Termux already installed; skipping APK install'
   else
     log 'Installing Termux'
     adb install -r "$termux_apk" >/dev/null
   fi
 
-  if adb_package_installed com.termux.boot; then
+  if [[ "$force_reinstall" == '1' ]] && adb_package_installed com.termux.boot; then
+    log 'Force mode enabled; reinstalling Termux:Boot'
+    adb install -r "$termux_boot_apk" >/dev/null
+  elif adb_package_installed com.termux.boot; then
     log 'Termux:Boot already installed; skipping APK install'
   else
     log 'Installing Termux:Boot'

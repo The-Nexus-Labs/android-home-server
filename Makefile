@@ -1,8 +1,9 @@
 PROFILE ?=
 PYTHON ?= python3
 ACTION ?= run
+INTERACTIVE_ARGS ?=
 
-.PHONY: help preflight manifest download unlock flash root provision interactive step updates-disable updates-enable updates-status ota-manual ota-auto ota-status
+.PHONY: help preflight manifest download unlock flash root provision interactive interactive-force step updates-disable updates-enable updates-status ota-manual ota-auto ota-status
 
 help:
 	@printf '%s\n' \
@@ -10,6 +11,7 @@ help:
 	  '  PROFILE=...    - optional profile file; defaults to auto-detecting config/<codename>.env' \
 	  '  STEP=...       - step key for make step (for example connect-wifi)' \
 	  '  ACTION=...     - run, apply, test, guide or name for make step' \
+	  '  INTERACTIVE_ARGS=... - extra flags for make interactive (for example INTERACTIVE_ARGS=--force)' \
 	  '  make preflight   - inspect the connected device' \
 	  '  make manifest    - build the pinned asset manifest only' \
 	  '  make download    - download and verify GrapheneOS, Magisk, Termux assets' \
@@ -21,7 +23,8 @@ help:
 	  '  make updates-status  - print current OS update-client mode' \
 	  '  make provision   - run the provisioning steps after root is ready' \
 	  '  make step        - run one step from src/steps via the step runner' \
-	  '  make interactive - run the full guided workflow with on-device instructions'
+	  '  make interactive - run the full guided workflow with on-device instructions' \
+	  '  make interactive INTERACTIVE_ARGS=--force - reflash GrapheneOS and rerun all post-flash steps'
 
 preflight:
 	PROFILE="$(PROFILE)" ./src/run-step.sh inspect-device apply
@@ -74,4 +77,7 @@ step:
 	PROFILE="$(PROFILE)" ./src/run-step.sh "$(STEP)" "$(ACTION)"
 
 interactive:
-	@PROFILE="$(PROFILE)" ./src/bootstrap-interactive.sh
+	@PROFILE="$(PROFILE)" ./src/bootstrap-interactive.sh $(INTERACTIVE_ARGS)
+
+interactive-force:
+	@PROFILE="$(PROFILE)" ./src/bootstrap-interactive.sh --force
