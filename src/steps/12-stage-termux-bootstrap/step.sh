@@ -13,14 +13,21 @@ step_state_key() {
 }
 
 step_is_done() {
-  termux_setup_helper_present && termux_boot_script_present
+  local wifi_ip
+
+  termux_setup_helper_present || return 1
+  termux_boot_script_present || return 1
+
+  wifi_ip=$(detect_wifi_ip)
+  [[ -n "$wifi_ip" ]] || return 1
+  ssh_port_open "$wifi_ip" "$TERMUX_SSH_PORT"
 }
 
 step_guide() {
   cat <<'EOF'
-This step stages the Termux setup script and boot script over ADB.
+This step stages the Termux setup script and boot script over ADB and waits until SSH is reachable.
 
-If the final SSH bootstrap does not start automatically, you will finish it later by opening Termux and running:
+If the automatic bootstrap does not finish on its own, you will open Termux and run:
   ./setup.sh
 EOF
 }
@@ -84,13 +91,32 @@ user=${termux_user:-unknown}
 password=$TERMUX_SSH_PASSWORD
 EOF
 
-  cat <<EOF
+  [[ -n "$wifi_ip" ]] || die 'failed to detect wlan0 IP after staging the Termux bootstrap'
 
-Provisioning finished as far as adb could take it.
+  if ssh_port_open "$wifi_ip" "$TERMUX_SSH_PORT"; then
+    log 'Automatic Termux bootstrap completed and SSH is reachable.'
+  else
+    print_manual_block "Finish the Termux bootstrap on the phone now.
+
 Connection details saved to: $connection_out
 
-If sshd is not already running, do this once on the phone inside Termux:
-  ./setup.sh
+On the phone:
+  1. Open Magisk and grant root to Termux if a prompt appears.
+  2. Open Termux.
+  3. Run:
+       ./setup.sh
+  4. Leave Termux open for 10 seconds.
+
+Expected SSH username: ${termux_user:-unknown}
+Detected Wi-Fi IP: ${wifi_ip:-unknown}
+"
+    wait_for_termux_bootstrap "$wifi_ip"
+  fi
+
+  cat <<EOF
+
+Termux bootstrap completed.
+Connection details saved to: $connection_out
 
 Expected SSH username: ${termux_user:-unknown}
 Detected Wi-Fi IP: ${wifi_ip:-unknown}
