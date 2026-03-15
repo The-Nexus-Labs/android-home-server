@@ -8,6 +8,11 @@ package_uid() {
 		| head -n1
 }
 
+package_installed() {
+	local package="$1"
+	pm list packages "$package" 2>/dev/null | grep -qx "package:$package"
+}
+
 whitelist_restrict_background() {
 	local package="$1"
 	local uid
@@ -15,6 +20,18 @@ whitelist_restrict_background() {
 	if [ -n "$uid" ]; then
 		cmd netpolicy add restrict-background-whitelist "$uid" || true
 	fi
+}
+
+apply_package_keepalive_policy() {
+	local package="$1"
+
+	package_installed "$package" || return 0
+
+	cmd deviceidle whitelist +"$package" || true
+	cmd appops set "$package" RUN_IN_BACKGROUND allow || true
+	cmd appops set "$package" RUN_ANY_IN_BACKGROUND allow || true
+	whitelist_restrict_background "$package"
+	am set-standby-bucket "$package" active || true
 }
 
 apply_wifi_send_device_name_restriction() {
@@ -35,15 +52,7 @@ apply_wifi_send_device_name_restriction() {
 }
 
 cmd deviceidle disable all || true
-cmd deviceidle whitelist +com.termux || true
-cmd deviceidle whitelist +com.termux.boot || true
-cmd appops set com.termux RUN_IN_BACKGROUND allow || true
-cmd appops set com.termux RUN_ANY_IN_BACKGROUND allow || true
-cmd appops set com.termux.boot RUN_IN_BACKGROUND allow || true
-cmd appops set com.termux.boot RUN_ANY_IN_BACKGROUND allow || true
-whitelist_restrict_background com.termux
-whitelist_restrict_background com.termux.boot
-am set-standby-bucket com.termux active || true
-am set-standby-bucket com.termux.boot active || true
+apply_package_keepalive_policy com.termux
+apply_package_keepalive_policy com.termux.boot
 settings put global low_power 0 || true
 apply_wifi_send_device_name_restriction "$wifi_send_dhcp_hostname_restriction" || true
