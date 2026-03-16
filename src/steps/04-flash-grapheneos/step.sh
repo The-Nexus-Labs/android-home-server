@@ -70,6 +70,8 @@ Manual action if the phone is not already in Fastboot Mode:
   TMPDIR="$GRAPHENEOS_RELEASE_DIR/tmp"
   mkdir -p "$TMPDIR"
   flash_log="$ARTIFACT_ROOT/flash-grapheneos.log"
+  log 'Running the official GrapheneOS flash script. This can take several minutes.'
+  log "Flash output is being streamed and saved to $flash_log"
   if ! (
     cd "$release_dir"
     PATH="$PLATFORM_TOOLS_DIR:$PATH" TMPDIR="$TMPDIR" bash ./flash-all.sh 2>&1

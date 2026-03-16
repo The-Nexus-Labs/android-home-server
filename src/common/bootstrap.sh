@@ -86,11 +86,20 @@ PY
 
 maybe_prompt_destructive() {
   local prompt=$1
+  local answer
+
   if [[ "${FORCE:-0}" == "1" ]]; then
     return 0
   fi
-  printf '%s [y/N] ' "$prompt"
-  read -r answer
+
+  if [[ -r /dev/tty && -w /dev/tty ]]; then
+    printf '    %s [y/N] ' "$prompt" > /dev/tty
+    read -r answer < /dev/tty
+  else
+    printf '    %s [y/N] ' "$prompt"
+    read -r answer
+  fi
+
   [[ "$answer" == "y" || "$answer" == "Y" ]]
 }
 
@@ -99,8 +108,14 @@ wait_for_enter() {
   if [[ "${FORCE:-0}" == "1" ]]; then
     return 0
   fi
-  printf '%s' "$prompt"
-  read -r _
+
+  if [[ -r /dev/tty && -w /dev/tty ]]; then
+    printf '    %s' "$prompt" > /dev/tty
+    read -r _ < /dev/tty
+  else
+    printf '    %s' "$prompt"
+    read -r _
+  fi
 }
 
 print_manual_block() {

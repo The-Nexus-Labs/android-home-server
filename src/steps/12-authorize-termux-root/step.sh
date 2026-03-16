@@ -16,13 +16,14 @@ step_is_done() {
 
 step_guide() {
   cat <<'EOF'
-This step triggers a real Termux root request and waits until Magisk Superuser access has been granted to Termux.
+This step stages a root-request helper in Termux and waits until Magisk Superuser access has been granted to Termux.
 
 On the phone:
-  1. Open Magisk.
-  2. Approve the Termux root prompt if it appears.
-  3. In Superuser, confirm that Termux is listed and allowed.
-  4. If Termux is still missing, open Termux once.
+  1. Open Termux.
+  2. Run:
+       ./request-root.sh
+  3. When Magisk opens or prompts, allow root for Termux.
+  4. In Magisk -> Superuser, confirm that Termux is listed and allowed.
   5. Return to the workflow.
 EOF
 }
@@ -41,6 +42,6 @@ step_apply() {
     return 0
   fi
 
-  log 'Triggering a Termux root request so Magisk can show the Termux entry.'
+  log 'Staging request-root.sh in Termux home so root can be granted from the actual Termux app.'
   wait_for_termux_root_access 'Grant Termux root in Magisk now.'
 }
