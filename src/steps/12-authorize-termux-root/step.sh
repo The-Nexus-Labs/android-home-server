@@ -16,12 +16,12 @@ step_is_done() {
 
 step_guide() {
   cat <<'EOF'
-This step waits until Magisk Superuser access has been granted to both Termux and Termux:Boot.
+This step waits until Magisk Superuser access has been granted to Termux.
 
 On the phone:
   1. Open Magisk.
   2. Go to Superuser.
-  3. Grant root for Termux and Termux:Boot.
+  3. Grant root for Termux.
   4. Return to the workflow.
 EOF
 }
@@ -35,12 +35,8 @@ step_apply() {
     die 'Termux is not installed yet; run ./src/run-step.sh install-termux apply first'
   fi
 
-  if ! adb_package_installed com.termux.boot; then
-    die 'Termux:Boot is not installed yet; run ./src/run-step.sh install-termux apply first'
-  fi
-
   if termux_root_grants_present; then
-    log 'Termux and Termux:Boot already have Magisk root access.'
+    log 'Termux already has Magisk root access.'
     return 0
   fi
 

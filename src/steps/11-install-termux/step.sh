@@ -72,4 +72,8 @@ step_apply() {
   log 'Launching Termux once to initialize its private directories'
   adb shell monkey -p com.termux -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
   sleep 10
+
+  log 'Launching Termux:Boot once to enable its boot receiver'
+  adb shell monkey -p com.termux.boot -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+  sleep 5
 }

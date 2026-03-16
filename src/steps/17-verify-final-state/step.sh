@@ -42,7 +42,7 @@ step_guide() {
 This final step confirms that the Android device behaves like a home server and reruns every earlier step check.
 
 If SSH is not reachable yet, finish these actions on the phone:
-  1. Make sure the Termux root authorization step has completed.
+  1. Make sure Termux has been granted root in Magisk.
   2. Open Termux.
   3. Run:
        ./setup.sh
