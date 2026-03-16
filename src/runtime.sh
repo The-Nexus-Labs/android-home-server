@@ -395,6 +395,36 @@ On the phone:
   done
 }
 
+trigger_termux_root_request() {
+  local termux_uid request_script
+
+  ensure_adb_ready
+
+  if ! adb_package_installed com.termux; then
+    return 1
+  fi
+
+  termux_uid=$(adb_root 'stat -c %u /data/data/com.termux' | tr -d '\r')
+  [[ -n "$termux_uid" ]] || return 1
+
+  request_script=/data/data/com.termux/files/home/.termux/request-root.sh
+
+  adb shell monkey -p com.termux -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+  adb_root "mkdir -p /data/data/com.termux/files/home/.termux && printf 'allow-external-apps=true\n' > /data/data/com.termux/files/home/.termux/termux.properties && cat > '$request_script' <<'EOF'
+#!/data/data/com.termux/files/usr/bin/bash
+su -c true >/dev/null 2>&1 || exit 1
+EOF
+chown -R ${termux_uid}:${termux_uid} /data/data/com.termux/files/home/.termux && chmod 700 '$request_script'"
+
+  adb shell am startservice \
+    -n com.termux/.app.RunCommandService \
+    -a com.termux.RUN_COMMAND \
+    --es com.termux.RUN_COMMAND_PATH "$request_script" \
+    --es com.termux.RUN_COMMAND_WORKDIR /data/data/com.termux/files/home \
+    --ez com.termux.RUN_COMMAND_BACKGROUND true \
+    --es com.termux.RUN_COMMAND_RUNNER app-shell >/dev/null 2>&1 || true
+}
+
 wait_for_termux_root_access() {
   local heading=${1:-Grant Termux root in Magisk now.}
 
@@ -403,13 +433,15 @@ wait_for_termux_root_access() {
       return 0
     fi
 
+    trigger_termux_root_request || true
+
     print_manual_block "$heading
 
 On the phone:
   1. Open Magisk.
-  2. Go to Superuser.
-  3. Grant root for Termux.
-  4. Return here.
+  2. Approve the Termux root prompt if it appears.
+  3. In Superuser, confirm that Termux is listed and allowed.
+  4. If Termux is still missing, open Termux once, then return here.
 "
     wait_for_enter 'Press Enter after granting Termux root: '
     heading='Termux root access is still not granted correctly in Magisk.'

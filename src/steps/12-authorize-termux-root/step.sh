@@ -16,13 +16,14 @@ step_is_done() {
 
 step_guide() {
   cat <<'EOF'
-This step waits until Magisk Superuser access has been granted to Termux.
+This step triggers a real Termux root request and waits until Magisk Superuser access has been granted to Termux.
 
 On the phone:
   1. Open Magisk.
-  2. Go to Superuser.
-  3. Grant root for Termux.
-  4. Return to the workflow.
+  2. Approve the Termux root prompt if it appears.
+  3. In Superuser, confirm that Termux is listed and allowed.
+  4. If Termux is still missing, open Termux once.
+  5. Return to the workflow.
 EOF
 }
 
@@ -40,5 +41,6 @@ step_apply() {
     return 0
   fi
 
+  log 'Triggering a Termux root request so Magisk can show the Termux entry.'
   wait_for_termux_root_access 'Grant Termux root in Magisk now.'
 }
